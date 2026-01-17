@@ -1,0 +1,65 @@
+\documentclass[a4paper,12pt]{report}
+\usepackage{geometry}
+\geometry{
+ a4paper,
+ left=30mm,
+ top=25mm,
+ bottom=20mm,
+ right=20mm
+}
+\usepackage{authblk}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[toc,page]{appendix}
+\usepackage{graphicx}
+\usepackage{mathtools}
+\usepackage{subcaption}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage{biblatex}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{biblatex}
+\usepackage{blindtext}
+\usepackage{csquotes}
+\usepackage{makecell}
+\usepackage[smartEllipses, pipeTables]{markdown}
+\addbibresource{reference.bib}
+\usepackage{geometry}
+\usepackage[normalem]{ulem}
+\useunder{\uline}{\ul}{}
+\usepackage{lscape}
+\usepackage{longtable}
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+
+
+\begin{document}
+\nocite{*}
+\input{before_main/title}
+\input{before_main/acknowledge}
+
+
+\tableofcontents{}
+% Change to separate figures and tables (17/12)
+
+\listoffigures
+\addcontentsline{toc}{chapter}{List of Figures}
+
+\listoftables
+\addcontentsline{toc}{chapter}{List of Tables}
+\pagebreak
+
+\input{before_main/abstract}
+\input{tex/intro}
+% MAIN TEX HERE
+% END MAIN TEXT HERE
+\printbibliography
+\appendix
+\input{tex/appendix/appendix1}
+
+
+
+\end{document}

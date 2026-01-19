@@ -1,0 +1,11 @@
+flowchart TD
+    A[Token Action] --> B{Action Type}
+    B -->|Logout| C[Add to blacklist<br/>reason: logout]
+    B -->|New Login| D[Add ALL user tokens<br/>reason: new-login]
+    B -->|Refresh| E[Add old token<br/>reason: refresh]
+    
+    C --> F[(TokenBlacklist)]
+    D --> F
+    E --> F
+    
+    F --> G[TTL auto-cleanup]

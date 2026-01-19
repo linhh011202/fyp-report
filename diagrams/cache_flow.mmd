@@ -1,0 +1,12 @@
+flowchart TD
+    A[GET /plans/latest] --> B{Redis cache?}
+    B -->|Hit| C{Value = NULL?}
+    C -->|Yes| D[Return null]
+    C -->|No| E[Return cached Plan]
+    
+    B -->|Miss| F[Query MongoDB]
+    F --> G{Plan exists?}
+    G -->|Yes| H[Cache for 1 hour]
+    G -->|No| I[Cache NULL for 60s]
+    H --> J[Return Plan]
+    I --> D

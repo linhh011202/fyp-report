@@ -1,0 +1,103 @@
+\section{Technology Stack}
+\label{sec:tech_stack}
+
+The Gateway Dashboard leverages modern, industry-standard technologies to ensure robustness, scalability, and developer productivity.
+
+\subsection{Frontend Technologies}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+\hline
+Vue.js & 2.x & Progressive JavaScript framework for building user interfaces \\
+\hline
+Vuetify & 2.x & Material Design component framework for Vue.js \\
+\hline
+Vue Router & 3.x & Official router for single-page application navigation \\
+\hline
+Axios & Latest & Promise-based HTTP client for API communication \\
+\hline
+\end{tabular}
+\caption{Frontend Technology Stack}
+\label{tab:frontend_tech}
+\end{table}
+
+\textbf{Vue.js 2} was selected for its gentle learning curve, excellent documentation, and reactive data binding capabilities. The framework's component-based architecture facilitates code reuse and maintainability. \textbf{Vuetify} provides a comprehensive set of Material Design components, enabling rapid UI development with a professional appearance.
+
+\subsection{Backend Technologies}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+\hline
+NestJS & 9.x & Progressive Node.js framework for server-side applications \\
+\hline
+TypeScript & 4.x & Typed superset of JavaScript for enhanced code quality \\
+\hline
+Passport & 0.6.x & Authentication middleware for Node.js \\
+\hline
+JWT & Latest & JSON Web Token for stateless authentication \\
+\hline
+\end{tabular}
+\caption{Backend Technology Stack}
+\label{tab:backend_tech}
+\end{table}
+
+\textbf{NestJS} provides a modular architecture with built-in dependency injection support, ideal for enterprise-grade applications. TypeScript ensures type safety and improved developer experience. \textbf{Passport} offers a flexible authentication framework with extensive strategy support for OAuth providers.
+
+\subsection{Data Storage and Caching}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+\hline
+MongoDB & 5.x & NoSQL document database for flexible schema design \\
+\hline
+Redis & 6.x & In-memory data store for caching and session management \\
+\hline
+\end{tabular}
+\caption{Storage Technologies}
+\label{tab:storage_tech}
+\end{table}
+
+\textbf{MongoDB} was chosen for its schema flexibility, horizontal scalability, and native JSON support. \textbf{Redis} serves dual purposes: caching frequently accessed data (plans, prices) and managing token blacklists for security.
+
+\subsubsection{Caching Architecture}
+
+Figure~\ref{fig:plan_caching} illustrates the caching architecture for the Plan module. The service layer first checks Redis for cached data, falling back to MongoDB on cache misses.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.6\textwidth]{images/plan_caching.png}
+\caption{Plan Module Caching Architecture}
+\label{fig:plan_caching}
+\end{figure}
+
+As depicted in Figure~\ref{fig:plan_caching}, the Plan Module implements a read-through caching strategy. When a request for plans is received, the \texttt{PlanService} first queries the Redis cache. If the data is found (cache hit), it is returned immediately. If not (cache miss), the service retrieves the data from MongoDB, stores it in Redis for future requests, and then returns it to the controller.
+
+Figure~\ref{fig:cache_flow} shows the detailed cache flow for retrieving the latest plans. This strategy includes cache penetration protection by caching NULL values for a short duration when no plans exist.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.6\textwidth]{images/cache_flow.png}
+\caption{Cache Flow for Latest Plans Retrieval}
+\label{fig:cache_flow}
+\end{figure}
+
+Figure~\ref{fig:cache_flow} provides a granular view of the "get latest plans" logic. It highlights the cache penetration protection mechanism: if a database query returns no plans, a special \texttt{NULL} value is cached for a short duration (e.g., 60 seconds). This prevents repeated queries for non-existent data from overwhelming the database essentially acting as a shield during high-traffic periods.
+
+\subsection{External Services}
+
+\begin{itemize}
+    \item \textbf{Stripe}: Payment processing platform for subscription billing, checkout sessions, and webhook handling.
+    \item \textbf{Google OAuth 2.0}: Identity provider for social login functionality.
+    \item \textbf{Apple Sign-In}: Authentication service for iOS and web users.
+\end{itemize}
+
+These third-party services were selected for their reliability, comprehensive documentation, and industry adoption, reducing development time while ensuring security and compliance.

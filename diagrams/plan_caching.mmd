@@ -1,0 +1,15 @@
+flowchart TB
+    subgraph "Plan Module"
+        CTRL[PlanController]
+        SVC[PlanService]
+    end
+
+    subgraph "Storage"
+        MONGO[(MongoDB)]
+        REDIS[(Redis Cache)]
+    end
+
+    CTRL --> SVC
+    SVC -->|Write| MONGO
+    SVC -->|Read| REDIS
+    REDIS -->|Cache miss| MONGO

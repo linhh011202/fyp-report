@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Controller as GoogleSSOController
+    participant Guard as GoogleAuthGuard
+    participant Strategy as GoogleStrategy
+    participant Google as Google OAuth
+    participant Auth as AuthService
+    participant DB as MongoDB
+
+    User->>Frontend: Click "Sign in with Google"
+    Frontend->>Controller: GET /auth/google/login
+    Controller->>Guard: @UseGuards(GoogleAuthGuard)
+    Guard->>Strategy: Initiate OAuth
+    Strategy->>Google: Redirect to consent screen
+    
+    Note over Google: User approves access
+    
+    Google->>Strategy: Callback with profile
+    Strategy->>Strategy: Extract email, name, photo
+    Strategy->>Guard: Return user object
+    Guard->>Controller: GET /auth/google/callback
+    
+    Controller->>Auth: checkUserByEmail(email)
+    Auth->>DB: Find user by email
+    
+    alt User not found
+        Auth-->>Controller: {requiresPassword: true}
+        Controller->>Auth: generateTemporaryToken(email)
+        Controller->>Frontend: Redirect /complete-signup + temporaryToken
+    else User exists
+        Auth->>Auth: revokeAllUserTokens(userId)
+        Auth->>Auth: Generate JWT
+        Auth->>DB: Store in UserTokens
+        Auth-->>Controller: {accessToken, subscriptionEnd}
+        Controller->>Frontend: localStorage + Redirect /sign-in
+    end

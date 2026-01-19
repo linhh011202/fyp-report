@@ -1,0 +1,142 @@
+\section{Authentication Flows}
+\label{sec:auth_flows}
+
+This section describes the detailed authentication flows for each supported method.
+
+\subsection{Email/Password Authentication}
+
+The traditional login flow uses Passport's LocalStrategy for credential validation. Figure~\ref{fig:auth_login_flow} shows the sequence.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.75\textwidth]{images/auth_login_flow.png}
+\caption{Email/Password Login Flow}
+\label{fig:auth_login_flow}
+\end{figure}
+
+The login process:
+\begin{enumerate}
+    \item Client sends credentials to \texttt{POST /auth/login}.
+    \item LocalAuthGuard triggers LocalStrategy validation.
+    \item AuthService queries MongoDB and compares password hashes using bcrypt.
+    \item If valid, existing tokens are revoked (single session enforcement).
+    \item New JWT is generated and stored in UserTokens collection.
+    \item Response includes access token, subscription end date, and verification status.
+\end{enumerate}
+
+\subsection{Google OAuth 2.0}
+
+Google SSO uses Passport's OAuth 2.0 strategy. Figure~\ref{fig:auth_google_flow} illustrates the flow.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.8\textwidth]{images/auth_google_flow.png}
+\caption{Google OAuth 2.0 Flow}
+\label{fig:auth_google_flow}
+\end{figure}
+
+\subsubsection{Google Strategy Configuration}
+
+\begin{lstlisting}[language=TypeScript, caption={GoogleStrategy Implementation}]
+@Injectable()
+export class GoogleStrategy extends 
+  PassportStrategy(Strategy, 'google') {
+  constructor(@Inject(authConfig.KEY) private auth) {
+    super({
+      clientID: auth.googleClientId,
+      clientSecret: auth.googleClientSecret,
+      callbackURL: auth.googleCallbackURL,
+      scope: ['email', 'profile'],
+    });
+  }
+
+  async validate(req, accessToken, _refreshToken, 
+    profile, done) {
+    const user = {
+      email: profile.emails[0].value,
+      firstName: profile.name.givenName,
+      lastName: profile.name.familyName,
+    };
+    done(null, user);
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Callback Handler Logic}
+
+The callback determines whether to redirect to complete-signup (new user) or sign-in (existing user):
+
+\begin{lstlisting}[language=TypeScript, caption={Google Callback Handler}]
+@Get('callback')
+@UseGuards(GoogleAuthGuard)
+async googleAuthRedirect(@Req() req, @Res() res) {
+  const result = await this.authService.checkUserByEmail(
+    req.user.email, userAgent, ipAddress
+  );
+
+  if (result.requiresPassword) {
+    // New user - generate temporary token
+    const tempToken = await this.authService
+      .generateTemporaryToken(result.email);
+    // Redirect to /complete-signup
+  } else if (result.accessToken) {
+    // Existing user - store token and redirect
+  }
+}
+\end{lstlisting}
+
+\subsection{Apple Sign-In}
+
+Apple Sign-In uses a POST callback with the identity token. Figure~\ref{fig:auth_apple_flow} shows the flow.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.8\textwidth]{images/auth_apple_flow.png}
+\caption{Apple Sign-In Flow}
+\label{fig:auth_apple_flow}
+\end{figure}
+
+\subsubsection{Token Verification}
+
+\begin{lstlisting}[language=TypeScript, caption={Apple Token Verification}]
+@Post('callback')
+async appleAuthCallback(@Body() body, @Res() res) {
+  let appleResponse;
+  try {
+    // Primary: use apple-signin-auth library
+    appleResponse = await appleSignin.verifyIdToken(
+      body.id_token, 
+      { audience: process.env.APPLE_CLIENT_ID }
+    );
+  } catch (error) {
+    // Fallback: manual verification
+    appleResponse = await this.authService
+      .verifyAppleToken(body.id_token);
+  }
+
+  const result = await this.authService
+    .checkUserByEmail(appleResponse.email);
+  // Handle new user or existing user...
+}
+\end{lstlisting}
+
+\subsection{Comparison of SSO Methods}
+
+\begin{table}[!ht]
+\centering
+\begin{tabular}{|l|p{4.5cm}|p{4.5cm}|}
+\hline
+\textbf{Aspect} & \textbf{Google OAuth} & \textbf{Apple Sign-In} \\
+\hline
+Flow Type & OAuth 2.0 redirect & POST with id\_token \\
+\hline
+Guard & GoogleAuthGuard (Passport) & None (manual verification) \\
+\hline
+Verification & Passport strategy & apple-signin-auth library \\
+\hline
+Email Privacy & Direct email provided & May use relay email \\
+\hline
+\end{tabular}
+\caption{Google vs Apple SSO Comparison}
+\label{tab:sso_comparison}
+\end{table}

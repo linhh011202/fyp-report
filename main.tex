@@ -21,6 +21,31 @@
 \usepackage{biblatex}
 \usepackage{listings}
 \usepackage{float}
+
+% Listings configuration for TypeScript
+\lstdefinelanguage{TypeScript}{
+  keywords={async, await, break, case, catch, class, const, continue, debugger, default, delete, do, else, enum, export, extends, false, finally, for, from, function, if, import, in, instanceof, let, new, null, return, super, switch, this, throw, true, try, typeof, var, void, while, with, yield, Promise, any, string, number, boolean, undefined},
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  morestring=[b]`,
+  sensitive=true
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  tabsize=2,
+  showstringspaces=false,
+  captionpos=b,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{orange}
+}
 \usepackage{biblatex}
 \usepackage{blindtext}
 \usepackage{csquotes}
@@ -39,11 +64,12 @@
 \begin{document}
 \nocite{*}
 \input{before_main/title}
-\input{before_main/acknowledge}
 
+% Front matter in standard academic order
+\input{tex/abstract}
+\input{tex/acknowledgement}
 
 \tableofcontents{}
-% Change to separate figures and tables (17/12)
 
 \listoffigures
 \addcontentsline{toc}{chapter}{List of Figures}
@@ -52,8 +78,10 @@
 \addcontentsline{toc}{chapter}{List of Tables}
 \pagebreak
 
-\input{before_main/abstract}
+% Main chapters
 \input{tex/intro}
+\input{tex/ch2_architecture}
+\input{tex/ch3_authentication}
 % MAIN TEX HERE
 % END MAIN TEXT HERE
 \printbibliography

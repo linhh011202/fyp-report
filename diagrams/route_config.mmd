@@ -1,0 +1,22 @@
+flowchart LR
+    subgraph "Public Routes"
+        A["/sign-in"]
+        B["/sign-up"]
+        C["/complete-signup"]
+        D["/success"]
+        E["/cancel"]
+    end
+    
+    subgraph "Protected - User"
+        F["/speeches"]
+        G["/files"]
+        H["/applications"]
+        I["/subscription"]
+    end
+    
+    subgraph "Protected - Admin"
+        J["/dashboard"]
+        K["/users"]
+        L["/request-log"]
+        M["/settings"]
+    end

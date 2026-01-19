@@ -1,0 +1,24 @@
+sequenceDiagram
+    participant Client
+    participant Guard as LocalAuthGuard
+    participant Strategy as LocalStrategy
+    participant Auth as AuthService
+    participant DB as MongoDB
+
+    Client->>Auth: POST /auth/login
+    Auth->>DB: Find user by email
+    DB-->>Auth: user document
+    Auth->>Auth: bcrypt.compareSync
+    
+    alt Password invalid
+        Auth-->>Client: 401 Invalid credentials
+    end
+    
+    Note over Auth: Single Session Enforcement
+    Auth->>Auth: revokeAllUserTokens
+    Auth->>DB: Bulk insert to TokenBlacklist
+    Auth->>DB: Delete from UserTokens
+    
+    Auth->>Auth: Generate JWT
+    Auth->>DB: Insert to UserTokens
+    Auth-->>Client: 200 OK + accessToken

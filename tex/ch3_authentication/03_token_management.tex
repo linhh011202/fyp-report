@@ -1,0 +1,136 @@
+\section{Token Management}
+\label{sec:token_management}
+
+This section covers the JWT token lifecycle, including the API endpoints for token operations.
+
+\subsection{Token Lifecycle Overview}
+
+\begin{table}[!ht]
+\centering
+\begin{tabular}{|l|l|p{5.5cm}|}
+\hline
+\textbf{Stage} & \textbf{API Endpoint} & \textbf{Description} \\
+\hline
+Generation & POST /auth/login & Creates JWT on successful authentication \\
+\hline
+Verification & POST /auth/verify-token & Validates token against blacklist and expiry \\
+\hline
+Refresh & POST /auth/refresh-token & Issues new token, blacklists old one \\
+\hline
+Revocation & POST /auth/logout & Adds token to blacklist immediately \\
+\hline
+\end{tabular}
+\caption{Token Lifecycle Stages}
+\label{tab:token_lifecycle}
+\end{table}
+
+\subsection{Token Generation}
+
+Upon successful authentication, the AuthService generates a JWT containing user claims:
+
+\begin{lstlisting}[language=TypeScript, caption={JWT Token Generation}]
+async login(user, userAgent, ipAddress) {
+  // Revoke existing tokens (single session)
+  await this.revokeAllUserTokens(user._id.toString());
+
+  const payload = {
+    email: user.email,
+    role: user.role,
+    name: user.name,
+    type: user.type,
+  };
+  
+  const token = this.jwtService.sign(payload, {
+    subject: user._id.toString()
+  });
+  const decoded = this.jwtService.decode(token);
+
+  // Store active token
+  await this.userTokenModel.create({
+    userId: user._id.toString(),
+    token,
+    expiresAt: new Date(decoded.exp * 1000),
+    userAgent,
+    ipAddress,
+  });
+
+  return { accessToken: token, ... };
+}
+\end{lstlisting}
+
+\subsection{Token Verification}
+
+The verification endpoint checks blacklist status, signature validity, and active session existence:
+
+\begin{lstlisting}[language=TypeScript, caption={Token Verification}]
+async verifyToken(token: string) {
+  // 1. Check blacklist
+  const isBlacklisted = await this.tokenBlacklistModel
+    .findOne({ token });
+  if (isBlacklisted) {
+    throw new UnauthorizedException('Token revoked');
+  }
+
+  // 2. Verify signature and expiration
+  const decoded = await this.jwtService.verifyAsync(token);
+
+  // 3. Check active session
+  const activeToken = await this.userTokenModel
+    .findOne({ token });
+  if (!activeToken) {
+    throw new UnauthorizedException('Session expired');
+  }
+
+  return { user: decoded };
+}
+\end{lstlisting}
+
+\subsection{Token Refresh}
+
+Refresh enables session continuation with expired tokens (signature must still be valid):
+
+\begin{lstlisting}[language=TypeScript, caption={Token Refresh}]
+async refreshAccessToken(expiredToken: string) {
+  // Decode without expiration check
+  const decoded = this.jwtService.decode(expiredToken);
+  
+  // Verify signature only
+  await this.jwtService.verifyAsync(expiredToken, { 
+    ignoreExpiration: true 
+  });
+  
+  // Blacklist old token
+  await this.tokenBlacklistModel.create({
+    token: expiredToken,
+    userId: decoded.sub,
+    expiresAt: new Date(decoded.exp * 1000),
+    reason: 'refresh',
+  });
+  
+  // Generate new token
+  const newToken = this.jwtService.sign({...}, {
+    subject: decoded.sub
+  });
+  
+  return { accessToken: newToken };
+}
+\end{lstlisting}
+
+\subsection{Token Revocation (Logout)}
+
+\begin{lstlisting}[language=TypeScript, caption={Logout Implementation}]
+async logout(token: string, userId: string) {
+  const decoded = this.jwtService.decode(token);
+
+  // Add to blacklist
+  await this.tokenBlacklistModel.create({
+    token,
+    userId,
+    expiresAt: new Date(decoded.exp * 1000),
+    reason: 'logout',
+  });
+
+  // Remove from active tokens
+  await this.userTokenModel.deleteOne({ token });
+}
+\end{lstlisting}

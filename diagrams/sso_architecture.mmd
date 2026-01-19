@@ -1,0 +1,43 @@
+flowchart TB
+    subgraph "SSO Modules"
+        direction TB
+        GSC[GoogleSSOController]
+        ASC[AppleSSOController]
+        GG[GoogleAuthGuard]
+        GS[GoogleStrategy]
+    end
+
+    subgraph "Auth Module"
+        AS[AuthService]
+        CUE[checkUserByEmail]
+        GTT[generateTemporaryToken]
+        RAT[revokeAllUserTokens]
+    end
+
+    subgraph "External Providers"
+        GO[Google OAuth 2.0]
+        AP[Apple Identity Service]
+    end
+
+    subgraph "Storage"
+        UT[(UserTokens)]
+        TB[(TokenBlacklist)]
+        US[(Users)]
+    end
+
+    GSC --> GG
+    GG --> GS
+    GS --> GO
+    GO --> GS
+
+    GSC --> AS
+    ASC --> AS
+    
+    AS --> CUE
+    CUE --> US
+    CUE --> GTT
+    CUE --> RAT
+    RAT --> TB
+    RAT --> UT
+
+    ASC --> AP

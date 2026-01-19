@@ -1,9 +1,58 @@
 \chapter{Introduction}
+\label{chap:introduction}
 
-\Blindtext
-\blinditemize
-\blindenumerate
-\blinddescription
-\blindmathtrue
-\blindmathfalse
-\blindmathpaper
+\section{Background}
+In the rapidly evolving landscape of speech processing technologies, the \textbf{Speech Gateway API} serves as a critical infrastructure for delivering advanced speech services to various applications. As the demand for these services grows, the need for a robust, centralized management system becomes paramount. Traditionally, interacting with such APIs required direct integration and manual management, which can be inefficient for end-users and administrators alike.
+
+The \textbf{Gateway Dashboard} project was initiated to bridge this gap, providing a user-friendly graphical interface that empowers users to manage their speech processing tasks while giving administrators the tools needed to oversee system operations, manage users, and monetize services effectively.
+
+\section{Problem Statement}
+Prior to this project, the Speech Gateway ecosystem faced several challenges:
+\begin{enumerate}
+    \item \textbf{Lack of User Interface:} Users had to rely on raw API calls or command-line tools to interact with speech services, which posed a high barrier to entry.
+    \item \textbf{Limited Access Control:} The existing system lacked a flexible authentication mechanism, supporting only basic credentials without modern Single Sign-On (SSO) capabilities.
+    \item \textbf{Absence of Monetization Infrastructure:} There was no automated system to handle subscriptions, billing, or tiered access plans, hindering the commercial viability of the services.
+    \item \textbf{Inefficient Administration:} Managing user accounts, permissions, and service plans required manual database interventions, which is not scalable.
+\end{enumerate}
+
+\section{Project Objectives}
+The primary objective of this project is to design and implement a comprehensive \textbf{Gateway Dashboard} and enhance the backend infrastructure to support commercial-grade features. Specific objectives include:
+
+\begin{itemize}
+    \item \textbf{Develop a web-based dashboard} using Vue.js and Vuetify to provide an intuitive interface for users to access speech services and manage their data.
+    \item \textbf{Implement a secure authentication system} supporting standard Email/Password login as well as OAuth 2.0 providers (Google) and Apple Sign-In for seamless user onboarding.
+    \item \textbf{Design a subscription and payment module} integrating Stripe to handle recurring billing, automated invoicing, and subscription lifecycle management.
+    \item \textbf{Create an administrative portal} for managing pricing plans, monitoring system usage, and overseeing user accounts with Role-Based Access Control (RBAC).
+    \item \textbf{Enhance system security} through a robust token management system, including token blacklisting and session control using Redis.
+\end{itemize}
+
+\section{Project Scope}
+The project scope encompasses both frontend and backend development:
+
+\subsection{Frontend Development}
+The frontend is built as a Single Page Application (SPA) using the \textbf{Vue.js 2} framework with \textbf{Vuetify} for UI components. Key deliverables include:
+\begin{itemize}
+    \item Public pages for Authentication (Sign In, Sign Up, OAuth handling).
+    \item User Dashboard for subscription management and service usage.
+    \item Admin Dashboard for plans management (JSON editor with validation) and system monitoring.
+    \item Navigation guards and interceptors for secure routing and API communication.
+\end{itemize}
+
+\subsection{Backend Development}
+The backend enhancements are implemented within the existing \textbf{NestJS} API Gateway. The scope includes:
+\begin{itemize}
+    \item \textbf{Auth Module:} Implementation of Google/Apple SSO strategies, JWT handling, and token security features (revocation, blacklisting).
+    \item \textbf{Payment Module:} Integration with Stripe API for checkout sessions, webhooks, and subscription synchronization.
+    \item \textbf{Plans Module:} A versioned, database-driven system for managing service plans with Redis caching for performance.
+    \item \textbf{Subscription Module:} Logic for quota tracking (batch/live durations) and access control based on subscription status.
+\end{itemize}
+
+\section{Report Organization}
+The remainder of this report is organized as follows:
+\begin{itemize}
+    \item \textbf{Chapter \ref{chap:architecture}}: Detailed overview of the system architecture and technology stack.
+    \item \textbf{Chapter \ref{chap:authentication}}: In-depth look at the authentication system, including SSO flows and security measures.
+    \item \textbf{Chapter \ref{chap:payment}}: Design and implementation of the subscription and payment processing system.
+    \item \textbf{Chapter \ref{chap:frontend}}: Description of the frontend component architecture and user interface design.
+    \item \textbf{Chapter \ref{chap:conclusion}}: Summary of the project achievements and suggestions for future work.
+\end{itemize}

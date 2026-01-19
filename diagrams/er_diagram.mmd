@@ -1,0 +1,54 @@
+erDiagram
+    Users ||--o{ UserTokens : "has active"
+    Users ||--o{ TokenBlacklist : "has revoked"
+    Users ||--|| Subscriptions : has
+    Plans ||--o{ Subscriptions : "priceId links to"
+    
+    Users {
+        ObjectId _id PK
+        String email UK
+        String password
+        String name
+        String role
+        String type
+        Boolean isVerified
+    }
+    
+    Subscriptions {
+        ObjectId _id PK
+        ObjectId user FK
+        String stripeSubscriptionId
+        String stripeCustomerId
+        String status
+        Object quota
+        Object usage
+        Date startDate
+        Date endDate
+    }
+    
+    Plans {
+        ObjectId _id PK
+        String id UK
+        String plans "JSON"
+        Number version UK
+        Date createdAt
+    }
+    
+    UserTokens {
+        ObjectId _id PK
+        String userId FK
+        String token
+        Date expiresAt
+        String userAgent
+        String ipAddress
+        Date createdAt
+    }
+    
+    TokenBlacklist {
+        ObjectId _id PK
+        String token
+        String userId FK
+        Date expiresAt
+        String reason
+        Date createdAt
+    }

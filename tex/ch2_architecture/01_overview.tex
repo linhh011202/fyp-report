@@ -1,0 +1,39 @@
+\section{Overview}
+\label{sec:arch_overview}
+
+The Gateway Dashboard system follows a modern three-tier architecture consisting of a \textbf{Vue.js} frontend, a \textbf{NestJS} backend API, and integration with external services. This separation of concerns ensures scalability, maintainability, and clear boundaries between presentation, business logic, and data persistence layers.
+
+\subsection{High-Level Architecture}
+
+Figure~\ref{fig:high_level_arch} illustrates the overall system architecture. The frontend communicates with the backend through RESTful APIs, while the backend interacts with external services such as Stripe for payment processing and OAuth providers for authentication.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.75\textwidth]{images/architecture_overview.png}
+\caption{High-Level System Architecture}
+\label{fig:high_level_arch}
+\end{figure}
+
+The architecture diagram details the data flow within the system. The \textbf{Frontend} layer consists of Vue Router directing requests to Views/Pages, which utilize Components and a Services Layer that communicates via an HTTP Client. The \textbf{Backend} layer comprises modular NestJS components: Auth, Stripe, Plans, Users, and Subscriptions modules. The \textbf{External Services} layer includes Google OAuth 2.0, Apple Sign-In, and Stripe Payment Gateway for third-party integrations.
+
+\subsection{Component Overview}
+
+The system is composed of the following major components:
+
+\begin{itemize}
+    \item \textbf{Frontend Dashboard}: A Single Page Application (SPA) built with Vue.js 2 and Vuetify, providing user interfaces for authentication, subscription management, and administrative functions.
+    \item \textbf{Backend API Gateway}: A NestJS-based REST API that handles authentication, authorization, business logic, and orchestration of external services.
+    \item \textbf{Database Layer}: MongoDB serves as the primary data store for users, subscriptions, plans, and tokens, with Redis providing caching for frequently accessed data.
+    \item \textbf{External Services}: Integration with Google OAuth 2.0, Apple Sign-In, and Stripe for third-party authentication and payment processing.
+\end{itemize}
+
+\subsection{Communication Flow}
+
+The typical request flow proceeds as follows:
+\begin{enumerate}
+    \item The user interacts with the Vue.js frontend through the browser.
+    \item The frontend dispatches HTTP requests to the backend API via Axios interceptors.
+    \item The backend validates the JWT token, checks authorization, and processes the request.
+    \item Business logic is executed, interacting with MongoDB, Redis, or external APIs as needed.
+    \item The response is returned to the frontend, which updates the user interface accordingly.
+\end{enumerate}

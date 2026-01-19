@@ -1,0 +1,13 @@
+flowchart TB
+    subgraph "Login Flow"
+        LOGIN[POST /auth/login] --> REVOKE[revokeAllUserTokens]
+        REVOKE --> BLACKLIST[(TokenBlacklist)]
+        LOGIN --> GEN[Generate JWT]
+        GEN --> STORE[(UserTokens)]
+    end
+
+    subgraph "Verification"
+        CHECK{Token valid?}
+        CHECK --> |Check| BLACKLIST
+        CHECK --> |Check| STORE
+    end

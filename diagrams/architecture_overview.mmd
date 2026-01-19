@@ -1,0 +1,31 @@
+graph TB
+    subgraph "Frontend - Vue.js Dashboard"
+        A[Vue Router] --> B[Views/Pages]
+        B --> C[Components]
+        C --> D[Services Layer]
+        D --> E[HTTP Client]
+    end
+    
+    subgraph "Backend - NestJS API Gateway"
+        F[Auth Module]
+        G[Stripe Module]
+        H[Plans Module]
+        I[Users Module]
+        J[Subscriptions Module]
+    end
+    
+    subgraph "External Services"
+        K[Google OAuth 2.0]
+        L[Apple Sign-In]
+        M[Stripe Payment Gateway]
+    end
+    
+    E --> F
+    E --> G
+    E --> H
+    E --> I
+    E --> J
+    
+    F --> K
+    F --> L
+    G --> M

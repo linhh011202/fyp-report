@@ -1,0 +1,176 @@
+\section{Database Design}
+\label{sec:database_design}
+
+The database schema is designed to support user management, authentication, subscription tracking, and service plan versioning. MongoDB's document-oriented approach allows for flexible schema evolution.
+
+\subsection{Core Collections}
+
+The system utilizes the following primary collections:
+
+\subsubsection{Users Collection}
+
+The \texttt{users} collection stores user account information and authentication credentials.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+email & String & User email (unique) \\
+\hline
+password & String & Hashed password \\
+\hline
+name & String & Full name \\
+\hline
+role & String & User role (user/admin) \\
+\hline
+type & String & Account type (trial/paid) \\
+\hline
+isVerified & Boolean & Email verification status \\
+\hline
+\end{tabular}
+\caption{Users Collection Schema}
+\label{tab:users_schema}
+\end{table}
+
+\subsubsection{Subscriptions Collection}
+
+The \texttt{subscriptions} collection tracks user subscriptions and quota usage.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+user & ObjectId & Reference to users collection \\
+\hline
+stripeSubscriptionId & String & Stripe subscription ID \\
+\hline
+stripeCustomerId & String & Stripe customer ID \\
+\hline
+status & String & Subscription status \\
+\hline
+quota & Object & Service quotas (batch, live duration) \\
+\hline
+usage & Object & Current usage tracking \\
+\hline
+startDate & Date & Subscription start date \\
+\hline
+endDate & Date & Subscription end date \\
+\hline
+\end{tabular}
+\caption{Subscriptions Collection Schema}
+\label{tab:subscriptions_schema}
+\end{table}
+
+The \texttt{quota} and \texttt{usage} fields store nested objects tracking batch and live processing durations in seconds. A value of -1 indicates unlimited access.
+
+\subsubsection{Plans Collection}
+
+The \texttt{plans} collection maintains versioned service plans.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+id & String & Unique plan identifier \\
+\hline
+plans & String & JSON string of plan details \\
+\hline
+version & Number & Plan version (auto-increment) \\
+\hline
+createdAt & Date & Creation timestamp \\
+\hline
+\end{tabular}
+\caption{Plans Collection Schema}
+\label{tab:plans_schema}
+\end{table}
+
+Storing plans as JSON strings enables dynamic schema evolution without database migrations.
+
+\subsection{Authentication Collections}
+
+To ensure secure session management, two additional collections were introduced:
+
+\subsubsection{UserTokens Collection}
+
+The \texttt{usertokens} collection tracks active JWT tokens for each user.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+userId & String & User identifier \\
+\hline
+token & String & JWT token string \\
+\hline
+expiresAt & Date & Token expiration (TTL indexed) \\
+\hline
+userAgent & String & Client user agent \\
+\hline
+ipAddress & String & Client IP address \\
+\hline
+\end{tabular}
+\caption{UserTokens Collection Schema}
+\label{tab:usertokens_schema}
+\end{table}
+
+MongoDB's TTL (Time-To-Live) index on \texttt{expiresAt} automatically removes expired tokens.
+
+\subsubsection{TokenBlacklist Collection}
+
+The \texttt{tokenblacklists} collection stores revoked tokens to prevent reuse.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+token & String & Revoked JWT token \\
+\hline
+userId & String & User identifier \\
+\hline
+expiresAt & Date & Original token expiration \\
+\hline
+reason & String & Revocation reason \\
+\hline
+\end{tabular}
+\caption{TokenBlacklist Collection Schema}
+\label{tab:tokenblacklist_schema}
+\end{table}
+
+\subsection{Entity Relationships}
+
+Figure~\ref{fig:er_diagram} illustrates the relationships between core collections:
+\begin{itemize}
+    \item Each \texttt{user} has zero or one \texttt{subscription}.
+    \item Each \texttt{subscription} references a \texttt{plan} by Stripe priceId.
+    \item Each \texttt{user} may have multiple active \texttt{tokens}.
+    \item Revoked tokens are stored in \texttt{tokenblacklist}.
+\end{itemize}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.75\textwidth]{images/er_diagram.png}
+\caption{Entity Relationship Diagram}
+\label{fig:er_diagram}
+\end{figure}
+
+The Entity Relationship Diagram in Figure~\ref{fig:er_diagram} showcases the database schema. The \texttt{Users} collection is central, linking to \texttt{Subscriptions} (1:1 relationship) and multiple \texttt{UserTokens}. The \texttt{Subscriptions} collection contains embedded objects for \texttt{quota} and \texttt{usage}, allowing efficient tracking of service limits. The \texttt{Plans} collection stands independently but is logically referenced by subscriptions via price IDs. The \texttt{TokenBlacklist} stores revoked tokens, ensuring security compliance.

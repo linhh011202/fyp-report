@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant User
+    participant iOS/Web as iOS/Web App
+    participant Apple as Apple Identity
+    participant Controller as AppleSSOController
+    participant Library as apple-signin-auth
+    participant Auth as AuthService
+    participant DB as MongoDB
+
+    User->>iOS/Web: Tap "Sign in with Apple"
+    iOS/Web->>Apple: Authenticate user
+    Apple-->>iOS/Web: id_token (JWT)
+    iOS/Web->>Controller: POST /auth/apple/callback
+    Note over Controller: Body: {id_token: "..."}
+    
+    Controller->>Library: verifyIdToken(id_token)
+    
+    alt Verification failed
+        Controller->>Auth: verifyAppleToken(id_token)
+        Note over Auth: Fallback manual verification
+    end
+    
+    Library-->>Controller: {email, sub, ...}
+    Controller->>Auth: checkUserByEmail(email)
+    Auth->>DB: Find user by email
+    
+    alt User not found
+        Auth-->>Controller: {requiresPassword: true}
+        Controller->>Auth: generateTemporaryToken(email)
+        Controller->>iOS/Web: Redirect /complete-signup
+    else User exists
+        Auth->>Auth: revokeAllUserTokens(userId)
+        Auth->>Auth: Generate JWT
+        Auth->>DB: Store in UserTokens
+        Auth-->>Controller: {accessToken}
+        Controller->>iOS/Web: localStorage + Redirect /sign-in
+    end

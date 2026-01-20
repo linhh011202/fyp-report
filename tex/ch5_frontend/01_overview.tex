@@ -1,0 +1,88 @@
+\section{Overview}
+\label{sec:frontend_overview}
+
+The Gateway Dashboard is a Vue.js 2 web application that provides a management interface for the Speech Gateway API. This chapter covers the frontend architecture, component design, and integration with the backend API.
+
+\subsection{Frontend Architecture}
+
+Figure~\ref{fig:frontend_architecture} illustrates the layered architecture of the frontend application.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/frontend_architecture.png}
+\caption{Frontend Application Architecture}
+\label{fig:frontend_architecture}
+\end{figure}
+
+The frontend follows a layered architecture:
+\begin{itemize}
+    \item \textbf{Vue Router}: Manages navigation and route guards.
+    \item \textbf{Views/Pages}: Page-level components for each route.
+    \item \textbf{Components}: Reusable UI components like PlanCard.
+    \item \textbf{Services Layer}: API communication logic.
+    \item \textbf{HTTP Client}: Axios with interceptors for token handling.
+\end{itemize}
+
+\subsection{Technology Stack}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|p{5cm}|}
+\hline
+\textbf{Layer} & \textbf{Technology} & \textbf{Purpose} \\
+\hline
+Framework & Vue.js 2.x & Reactive UI framework \\
+\hline
+UI Library & Vuetify 2.x & Material design components \\
+\hline
+HTTP Client & Axios & API communication \\
+\hline
+Router & Vue Router & SPA navigation \\
+\hline
+State & Vue Instance + Mixins & Application state \\
+\hline
+Payment & Stripe Checkout & Subscription processing \\
+\hline
+\end{tabular}
+\caption{Frontend Technology Stack}
+\label{tab:frontend_tech_stack}
+\end{table}
+
+\subsection{Project Structure}
+
+\begin{lstlisting}[caption={Frontend Project Structure}]
+gateway-dashboard/
+  src/
+    components/
+      PlanCard.vue          # Subscription plan display
+    layouts/
+      Main.vue              # Main app layout
+    mixins/
+      auth.mixin.js         # Auth functionality mixin
+    router/
+      index.js              # Route definitions
+      hooks.js              # Navigation guards
+    services/
+      auth.service.js       # Authentication API
+      plans.service.js      # Plans API
+      stripe.service.js     # Stripe integration
+      user.service.js       # User/subscription API
+    views/
+      SignIn.vue            # Login page
+      SignUp.vue            # Registration page
+      CompleteSignup.vue    # OAuth completion
+      Subscription.vue      # Subscription management
+      admin/
+        JsonPlansEditor.vue # Admin plans editor
+    http.js                 # Axios HTTP client
+    main.js                 # App entry point
+\end{lstlisting}
+
+\subsection{Chapter Organization}
+
+This chapter is organized as follows:
+\begin{itemize}
+    \item \textbf{Section 5.2}: Authentication frontend with OAuth integration
+    \item \textbf{Section 5.3}: Routing and navigation guards
+    \item \textbf{Section 5.4}: Subscription management interface
+\end{itemize}

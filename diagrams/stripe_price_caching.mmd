@@ -1,0 +1,23 @@
+flowchart TD
+    A[getPrice request] --> B{Check Redis cache}
+    
+    B -->|Cache hit| C{Value = NULL?}
+    C -->|Yes| D[Throw: Price not found]
+    C -->|No| E[Return cached price]
+    
+    B -->|Cache miss| F[Call Stripe API]
+    F --> G{Price exists?}
+    
+    G -->|Yes| H[Cache price for 24h]
+    H --> I[Return price]
+    
+    G -->|No / Error| J{Is resource_missing?}
+    J -->|Yes| K[Cache NULL for 60s]
+    K --> D
+    J -->|No| L[Throw original error]
+    
+    style D fill:#ffebee,stroke:#c62828
+    style L fill:#ffebee,stroke:#c62828
+    style E fill:#e8f5e9,stroke:#388e3c
+    style I fill:#e8f5e9,stroke:#388e3c
+    style K fill:#fff3e0,stroke:#f57c00

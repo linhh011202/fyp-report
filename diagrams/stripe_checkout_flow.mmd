@@ -1,0 +1,30 @@
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API as API Gateway
+    participant Stripe
+    participant DB as MongoDB
+
+    User->>Frontend: Select subscription plan
+    Frontend->>API: POST /stripe/stripe-checkout-session
+    Note over API: Extract user from JWT
+    
+    API->>Stripe: Create checkout session
+    Note over Stripe: mode: subscription<br/>metadata: {userId}
+    Stripe-->>API: {url, sessionId}
+    API-->>Frontend: Checkout URL
+    
+    Frontend->>Stripe: Redirect to checkout.stripe.com
+    User->>Stripe: Enter payment details
+    Stripe->>User: Redirect to success URL
+    
+    Stripe->>API: POST /stripe/webhook
+    Note over API: checkout.session.completed
+    API->>Stripe: Retrieve session with line_items
+    Stripe-->>API: Session with priceId
+    
+    API->>API: Match plan by priceId
+    API->>DB: Create/Update subscription
+    Note over DB: Set quota from plan
+    
+    API-->>Stripe: {received: true}

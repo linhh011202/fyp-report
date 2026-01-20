@@ -1,0 +1,33 @@
+flowchart TB
+    subgraph Client["Vue.js Dashboard"]
+        A[Vue Router] --> B[Views/Pages]
+        B --> C[Components]
+        C --> D[Services Layer]
+        D --> E[HTTP Client]
+    end
+    
+    subgraph Backend["NestJS API Gateway"]
+        F[Auth Module]
+        G[Stripe Module]
+        H[Plans Module]
+        I[Subscriptions Module]
+    end
+    
+    subgraph External["External Services"]
+        J[Google OAuth 2.0]
+        K[Apple Sign-In]
+        L[Stripe Checkout]
+    end
+    
+    E --> F
+    E --> G
+    E --> H
+    E --> I
+    
+    F --> J
+    F --> K
+    G --> L
+
+    style Client fill:#42b883,stroke:#333,color:#fff
+    style Backend fill:#e0234e,stroke:#333,color:#fff
+    style External fill:#635bff,stroke:#333,color:#fff

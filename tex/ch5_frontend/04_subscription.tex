@@ -1,0 +1,145 @@
+\section{Subscription Management Interface}
+\label{sec:frontend_subscription}
+
+The subscription interface provides plan selection, payment processing, and quota monitoring.
+
+\subsection{Component Architecture}
+
+The subscription system consists of interconnected components:
+\begin{itemize}
+    \item \textbf{Subscription.vue}: Main page with conditional views for users and admins.
+    \item \textbf{PlanCard.vue}: Displays plan details with dynamic pricing from Stripe.
+    \item \textbf{JsonPlansEditor.vue}: Admin-only JSON editor for plan management.
+\end{itemize}
+
+\subsection{User Subscription View}
+
+For users with active subscriptions, the view displays:
+\begin{itemize}
+    \item Subscription period (start/end dates)
+    \item Quota allocation (batch and live processing)
+    \item Usage progress with color-coded indicators
+    \item Cancel/Resume subscription controls
+\end{itemize}
+
+\begin{lstlisting}[language=TypeScript, caption={Usage Percentage Calculation}]
+calculateUsagePercent(used, quota) {
+  if (quota === -1) return 0      // Unlimited
+  if (quota === 0) return 100
+  return Math.min((used / quota) * 100, 100)
+}
+
+getUsageColor(used, quota) {
+  if (quota === -1) return 'success'
+  const percent = (used / quota) * 100
+  if (percent >= 90) return 'error'
+  if (percent >= 75) return 'warning'
+  return 'success'
+}
+\end{lstlisting}
+
+\subsection{PlanCard Component}
+
+The PlanCard fetches pricing from Stripe and displays plan features:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|p{5cm}|}
+\hline
+\textbf{Prop} & \textbf{Type} & \textbf{Description} \\
+\hline
+plan & Object & Plan data (id, name, features, priceId) \\
+\hline
+disabled & Boolean & Disable subscribe button (for admins) \\
+\hline
+\end{tabular}
+\caption{PlanCard Component Props}
+\label{tab:plancard_props}
+\end{table}
+
+\begin{lstlisting}[language=TypeScript, caption={PlanCard Price Fetching}]
+async fetchPriceInfo() {
+  if (!this.plan.priceId) return
+  
+  try {
+    this.loadingPrice = true
+    this.priceInfo = await stripeService.getPriceInfo(
+      this.plan.priceId
+    )
+  } catch (error) {
+    this.priceError = 'Failed to load price'
+  } finally {
+    this.loadingPrice = false
+  }
+}
+
+// Computed property for display
+get formattedPrice() {
+  if (!this.priceInfo) return 'Loading...'
+  const amount = this.priceInfo.unit_amount / 100
+  return `$${amount.toFixed(2)}`
+}
+\end{lstlisting}
+
+\subsection{Stripe Checkout Integration}
+
+When a user subscribes, the frontend initiates Stripe Checkout:
+
+\begin{lstlisting}[language=TypeScript, caption={Checkout Session Creation}]
+async handleSubscribe(priceId) {
+  try {
+    const data = await stripeService.createCheckoutSession(
+      priceId
+    )
+    
+    if (data?.url) {
+      window.location.href = data.url
+    } else {
+      this.showError('Failed to redirect. Please try again.')
+    }
+  } catch (err) {
+    console.error('Subscription error', err)
+    this.showError('An error occurred during checkout.')
+  }
+}
+\end{lstlisting}
+
+\subsection{Cancel and Resume Subscription}
+
+Users can manage their subscription lifecycle:
+
+\begin{lstlisting}[language=TypeScript, caption={Cancel Subscription}]
+async handleCancelSubscription() {
+  if (!confirm('Are you sure you want to cancel?')) {
+    return
+  }
+
+  try {
+    this.cancellingSubscription = true
+    await stripeService.cancelSubscription(
+      this.subscription.stripeSubscriptionId
+    )
+    await this.checkStripeSubscriptionStatus(
+      this.subscription.stripeSubscriptionId
+    )
+    
+    this.showSuccess('Subscription scheduled for cancellation.')
+  } catch (err) {
+    this.showError('Failed to cancel subscription.')
+  } finally {
+    this.cancellingSubscription = false
+  }
+}
+\end{lstlisting}
+
+\subsection{Admin Plans Editor}
+
+Administrators access a JSON editor for managing plans:
+\begin{itemize}
+    \item Live JSON validation with syntax highlighting
+    \item Stripe price ID validation before publishing
+    \item Diff comparison with current version
+    \item Version history tracking
+\end{itemize}
+
+The editor validates each plan's \texttt{priceId} against Stripe before allowing publication, ensuring only valid pricing configurations are saved.

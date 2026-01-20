@@ -1,0 +1,158 @@
+\section{Plan Management}
+\label{sec:plan_management}
+
+The Plan module manages pricing plans with versioning support and Redis caching for high-performance retrieval.
+
+\subsection{Module Architecture}
+
+The Plan module consists of three components organized with clear separation of concerns:
+\begin{itemize}
+    \item \textbf{PlanController}: Exposes REST endpoints for plan management.
+    \item \textbf{PlanService}: Contains business logic for versioning and caching.
+    \item \textbf{Plan Schema}: Defines the MongoDB document structure.
+\end{itemize}
+
+\subsection{Database Schema}
+
+Plans are stored as versioned documents, allowing for plan updates without affecting existing subscriptions.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+id & String & Unique random hex identifier \\
+\hline
+plans & String & JSON string containing plan array \\
+\hline
+version & Number & Auto-incremented version number \\
+\hline
+createdAt & Date & Creation timestamp \\
+\hline
+\end{tabular}
+\caption{Plans Collection Schema}
+\label{tab:plans_schema_ch4}
+\end{table}
+
+Each plan within the JSON structure contains:
+\begin{itemize}
+    \item \texttt{id}: Unique plan identifier (e.g., ``basic'', ``pro'')
+    \item \texttt{name}: Display name for the plan
+    \item \texttt{features}: Array of feature descriptions
+    \item \texttt{priceId}: Stripe price ID for billing
+    \item \texttt{batchDuration}: Allowed batch processing seconds (-1 for unlimited)
+    \item \texttt{liveDuration}: Allowed live processing seconds (-1 for unlimited)
+\end{itemize}
+
+\subsection{Plan Versioning Flow}
+
+Figure~\ref{fig:plan_versioning_flow} illustrates the plan creation process with automatic versioning and cache invalidation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/plan_versioning_flow.png}
+\caption{Plan Versioning Flow with Cache Invalidation}
+\label{fig:plan_versioning_flow}
+\end{figure}
+
+The versioning process ensures:
+\begin{enumerate}
+    \item Each plan version is immutable once created.
+    \item New versions automatically receive an incremented version number.
+    \item Existing subscriptions reference their original plan version.
+    \item Cache is invalidated immediately upon new version creation.
+\end{enumerate}
+
+\subsection{Redis Caching Implementation}
+
+The Plan module implements a read-through caching strategy with cache penetration protection.
+
+\subsubsection{Caching Strategy}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|p{5cm}|}
+\hline
+\textbf{Cache Key} & \textbf{TTL} & \textbf{Purpose} \\
+\hline
+\texttt{plan:latest} & 1 hour & Cache latest plan version \\
+\hline
+\texttt{plan:latest} (NULL) & 60 seconds & Prevent cache penetration \\
+\hline
+\end{tabular}
+\caption{Plan Cache Configuration}
+\label{tab:plan_cache_config}
+\end{table}
+
+\subsubsection{Implementation Details}
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Caching Implementation}]
+private readonly CACHE_KEY = 'plan:latest'
+private readonly CACHE_TTL = 3600    // 1 hour
+private readonly NULL_TTL = 60       // 60 seconds
+
+async getLatestVersion(): Promise<Plan | null> {
+  const cached = await this.redisClient.get(this.CACHE_KEY)
+  
+  if (cached) {
+    if (cached === 'NULL') {
+      return null  // Cache penetration protection
+    }
+    return JSON.parse(cached) as Plan
+  }
+
+  // Cache miss - query database
+  const latestPlan = await this.planModel
+    .findOne().sort({ version: -1 }).exec()
+
+  if (latestPlan) {
+    await this.redisClient.set(
+      this.CACHE_KEY, JSON.stringify(latestPlan),
+      { EX: this.CACHE_TTL }
+    )
+  } else {
+    // Cache NULL to prevent repeated DB queries
+    await this.redisClient.set(
+      this.CACHE_KEY, 'NULL', { EX: this.NULL_TTL }
+    )
+  }
+
+  return latestPlan
+}
+\end{lstlisting}
+
+\subsection{API Endpoints}
+
+\subsubsection{Create Plan (Admin Only)}
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Creation Endpoint}]
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.Admin)
+@Post()
+async create(@Body() dto: CreatePlansDto) {
+  await dto.validateDataStructure()
+  const result = await this.planService.create(dto.data)
+  return {
+    statusCode: HttpStatus.CREATED,
+    message: 'Plans created successfully',
+    data: { plans: result.plans, version: result.version },
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Get Latest Plans (Public)}
+
+\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Endpoint}]
+@Get('latest')
+async getLatestVersion() {
+  const plans = await this.planService.getLatestVersion()
+  return {
+    statusCode: HttpStatus.OK,
+    message: 'Latest plans retrieved successfully',
+    data: plans,
+  }
+}
+\end{lstlisting}

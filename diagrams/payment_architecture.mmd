@@ -1,0 +1,54 @@
+flowchart TB
+    subgraph Client["Client Layer"]
+        WEB[Web App]
+        MOBILE[Mobile App]
+    end
+
+    subgraph Gateway["API Gateway"]
+        subgraph PlanMod["Plan Module"]
+            PLAN_CTRL[PlanController]
+            PLAN_SVC[PlanService]
+        end
+
+        subgraph SubMod["Subscription Module"]
+            SUB_CTRL[SubscriptionController]
+            SUB_SVC[SubscriptionService]
+        end
+
+        subgraph StripeMod["Stripe Module"]
+            STRIPE_CTRL[StripeController]
+            STRIPE_SVC[StripeService]
+        end
+    end
+
+    subgraph External["External Services"]
+        STRIPE[Stripe API]
+    end
+
+    subgraph Storage["Data Layer"]
+        MONGO[(MongoDB)]
+        REDIS[(Redis Cache)]
+    end
+
+    WEB --> STRIPE_CTRL
+    MOBILE --> STRIPE_CTRL
+    
+    STRIPE_CTRL --> STRIPE_SVC
+    STRIPE_CTRL --> PLAN_SVC
+    STRIPE_CTRL --> SUB_SVC
+    
+    STRIPE_SVC --> STRIPE
+    STRIPE_SVC --> REDIS
+    
+    PLAN_CTRL --> PLAN_SVC
+    PLAN_SVC --> REDIS
+    PLAN_SVC --> MONGO
+    
+    SUB_CTRL --> SUB_SVC
+    SUB_SVC --> MONGO
+    
+    STRIPE -->|Webhook| STRIPE_CTRL
+
+    style STRIPE fill:#635bff,stroke:#333,color:#fff
+    style REDIS fill:#dc382d,stroke:#333,color:#fff
+    style MONGO fill:#4db33d,stroke:#333,color:#fff

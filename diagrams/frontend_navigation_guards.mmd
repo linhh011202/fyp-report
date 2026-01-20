@@ -1,0 +1,23 @@
+flowchart TD
+    A[Navigation Start] --> B[ensureSession]
+    B --> C{User Loaded?}
+    C -->|No| D[getCurrentUser]
+    C -->|Yes| E[Set isSignedIn]
+    D --> E
+    
+    E --> F[ensureSignedIn]
+    F --> G{requiresAuth?}
+    G -->|No| H[Allow Access]
+    G -->|Yes| I{isSignedIn?}
+    
+    I -->|No| J[Redirect to SignIn]
+    I -->|Yes| K{requiresAdmin?}
+    
+    K -->|No| H
+    K -->|Yes| L{Is Admin?}
+    L -->|Yes| H
+    L -->|No| M[Redirect to Speeches]
+
+    style H fill:#e8f5e9,stroke:#388e3c
+    style J fill:#ffebee,stroke:#c62828
+    style M fill:#fff3e0,stroke:#f57c00

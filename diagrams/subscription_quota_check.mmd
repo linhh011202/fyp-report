@@ -1,0 +1,28 @@
+flowchart TD
+    A[checkSubscription] --> B{Subscription exists?}
+    B -->|No| C[Return: No subscription]
+    
+    B -->|Yes| D{Expired?}
+    D -->|Yes| E[Return: Subscription expired]
+    
+    D -->|No| F{Check speech type}
+    
+    F -->|batch| G{quota.batch == -1?}
+    G -->|Yes| H[Unlimited - Allow]
+    G -->|No| I{usage + request > quota?}
+    I -->|Yes| J[Return: Quota exceeded]
+    I -->|No| H
+    
+    F -->|live| K{quota.live == -1?}
+    K -->|Yes| H
+    K -->|No| L{usage + request > quota?}
+    L -->|Yes| M[Return: Quota exceeded]
+    L -->|No| H
+    
+    H --> N[Return: Success]
+    
+    style C fill:#ffebee,stroke:#c62828
+    style E fill:#ffebee,stroke:#c62828
+    style J fill:#ffebee,stroke:#c62828
+    style M fill:#ffebee,stroke:#c62828
+    style N fill:#e8f5e9,stroke:#388e3c

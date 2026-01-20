@@ -1,0 +1,120 @@
+\section{Routing and Navigation}
+\label{sec:frontend_routing}
+
+Vue Router manages navigation with guards that enforce authentication and role-based access control.
+
+\subsection{Route Configuration}
+
+Routes are categorized by authentication requirements:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|l|}
+\hline
+\textbf{Path} & \textbf{Auth} & \textbf{Admin} & \textbf{Component} \\
+\hline
+/sign-in & No & No & SignIn.vue \\
+\hline
+/sign-up & No & No & SignUp.vue \\
+\hline
+/complete-signup & No & No & CompleteSignup.vue \\
+\hline
+/success & No & No & Success.vue \\
+\hline
+/cancel & No & No & Cancel.vue \\
+\hline
+/speeches & Yes & No & Speeches.vue \\
+\hline
+/files & Yes & No & Files.vue \\
+\hline
+/applications & Yes & No & Applications.vue \\
+\hline
+/subscription & Yes & No & Subscription.vue \\
+\hline
+/dashboard & Yes & Yes & Dashboard.vue \\
+\hline
+/users & Yes & Yes & Users.vue \\
+\hline
+/request-log & Yes & Yes & RequestLog.vue \\
+\hline
+/settings & Yes & Yes & Settings.vue \\
+\hline
+\end{tabular}
+\caption{Route Definitions}
+\label{tab:route_definitions}
+\end{table}
+
+\subsection{Navigation Guards Flow}
+
+Figure~\ref{fig:frontend_navigation_guards} illustrates the navigation guard logic.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/frontend_navigation_guards.png}
+\caption{Navigation Guards Flow}
+\label{fig:frontend_navigation_guards}
+\end{figure}
+
+\subsection{Guard Implementation}
+
+Two navigation guards work together:
+
+\subsubsection{Session Guard}
+
+Ensures user data is loaded before navigation:
+
+\begin{lstlisting}[language=TypeScript, caption={Session Guard}]
+export const ensureSession = router => async (to, from, next) => {
+  await Vue.nextTick()
+  
+  if (!router.app.user && to.name !== 'SignIn') {
+    const user = await router.app.getCurrentUser()
+    to.meta.isSignedIn = !!user
+  } else {
+    to.meta.isSignedIn = router.app.user !== null
+  }
+  next()
+}
+\end{lstlisting}
+
+\subsubsection{Auth Guard}
+
+Enforces authentication and admin requirements:
+
+\begin{lstlisting}[language=TypeScript, caption={Auth Guard}]
+export const ensureSignedIn = router => (to, from, next) => {
+  const requiresAdmin = anyTrue(to, 'requiresAdmin')
+  const requiresAuth = requiresAdmin || anyTrue(to, 'requiresAuth')
+  
+  if (requiresAuth) {
+    if (!to.meta.isSignedIn) {
+      next({ name: 'SignIn' })
+    } else if (requiresAdmin && 
+               router.app.user.role !== 'admin') {
+      next({ name: 'Speeches' })
+    } else {
+      next()
+    }
+  } else {
+    next()
+  }
+}
+\end{lstlisting}
+
+\subsection{HTTP Interceptors}
+
+Figure~\ref{fig:frontend_http_interceptor} shows the HTTP interceptor flow for automatic token handling.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/frontend_http_interceptor.png}
+\caption{HTTP Interceptor Flow with Token Refresh}
+\label{fig:frontend_http_interceptor}
+\end{figure}
+
+The interceptors handle:
+\begin{itemize}
+    \item \textbf{Request}: Automatically attach Authorization header with JWT token.
+    \item \textbf{Response 401}: Attempt token refresh; if failed, redirect to login.
+    \item \textbf{Other Errors}: Display error message in snackbar.
+\end{itemize}

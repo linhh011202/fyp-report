@@ -1,0 +1,195 @@
+\section{Subscription Management}
+\label{sec:subscription_management}
+
+The Subscription module tracks user subscriptions, including quota limits, usage tracking, and access control.
+
+\subsection{Module Architecture}
+
+The Subscription module provides the core access control mechanism:
+\begin{itemize}
+    \item \textbf{SubscriptionController}: Exposes endpoints for viewing and managing subscriptions.
+    \item \textbf{SubscriptionService}: Contains quota checking and usage tracking logic.
+    \item \textbf{Subscription Schema}: Defines the MongoDB document with quota and usage fields.
+\end{itemize}
+
+\subsection{Database Schema}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|p{5.5cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\hline
+\_id & ObjectId & Primary key \\
+\hline
+user & ObjectId & Reference to Users collection \\
+\hline
+stripeSubscriptionId & String & Stripe subscription identifier \\
+\hline
+stripeCustomerId & String & Stripe customer identifier \\
+\hline
+status & String & Subscription status (active, canceled, etc.) \\
+\hline
+quota & Object & Allowed limits (batchDuration, liveDuration) \\
+\hline
+usage & Object & Current usage (batchDuration, liveDuration) \\
+\hline
+startDate & Date & Subscription start date \\
+\hline
+endDate & Date & Subscription end date \\
+\hline
+\end{tabular}
+\caption{Subscriptions Collection Schema}
+\label{tab:subscriptions_schema_ch4}
+\end{table}
+
+\subsection{Quota System}
+
+The quota system uses two embedded objects to track limits and usage:
+
+\begin{lstlisting}[language=TypeScript, caption={Quota and Usage Schema Definition}]
+@Prop(raw({
+  batchDuration: { type: Number, default: -1 },
+  liveDuration: { type: Number, default: -1 },
+}))
+quota: SubscriptionUnit
+
+@Prop(raw({
+  batchDuration: { type: Number, default: 0 },
+  liveDuration: { type: Number, default: 0 },
+}))
+usage: SubscriptionUnit
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{8cm}|}
+\hline
+\textbf{Value} & \textbf{Meaning} \\
+\hline
+-1 & Unlimited access \\
+\hline
+0 & No access to this feature \\
+\hline
+$>$ 0 & Number of seconds allowed \\
+\hline
+\end{tabular}
+\caption{Quota Value Interpretation}
+\label{tab:quota_values}
+\end{table}
+
+\subsection{Quota Checking Flow}
+
+Figure~\ref{fig:subscription_quota_check} shows the decision tree for validating user access.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/subscription_quota_check.png}
+\caption{Subscription Quota Check Flow}
+\label{fig:subscription_quota_check}
+\end{figure}
+
+\subsection{Implementation Details}
+
+\subsubsection{Quota Check Logic}
+
+\begin{lstlisting}[language=TypeScript, caption={Quota Check Implementation}]
+async checkSubscription(
+  userId: string,
+  speechType?: 'live' | 'batch',
+  payload?: SubscriptionUnit,
+): Promise<{ success: boolean; message: string }> {
+  const sub = await this.subscriptionModel
+    .findOne({ user: userId }).exec()
+
+  if (!sub) {
+    return { success: false, message: 'No subscription' }
+  }
+
+  if (new Date() > sub.endDate) {
+    return { success: false, message: 'Subscription expired' }
+  }
+
+  // Check batch quota (if not unlimited)
+  if (speechType === 'batch' && sub.quota.batchDuration !== -1) {
+    const wouldExceed = payload
+      ? sub.usage.batchDuration + payload.batchDuration 
+        > sub.quota.batchDuration
+      : sub.usage.batchDuration > sub.quota.batchDuration
+    
+    if (wouldExceed) {
+      return { success: false, message: 'Quota exceeded' }
+    }
+  }
+
+  // Similar check for live quota...
+  return { success: true, message: null }
+}
+\end{lstlisting}
+
+\subsubsection{Authentication Integration}
+
+The subscription status is included in the login response:
+
+\begin{lstlisting}[language=TypeScript, caption={Login Response with Subscription}]
+// In AuthService.login()
+const subscription = await this.subscriptionService
+  .findByUser(user._id.toString())
+
+return {
+  accessToken: token,
+  subscriptionEnd: subscription?.endDate?.getTime() || null,
+  isVerified: user.isVerified,
+}
+\end{lstlisting}
+
+\subsection{API Endpoints}
+
+\subsubsection{Get Subscription}
+
+Users can view their own subscription; admins can view any:
+
+\begin{lstlisting}[language=TypeScript, caption={Get Subscription Endpoint}]
+@UseGuards(JwtAuthGuard)
+@Get('/user/:id')
+getSubscriptionByUser(
+  @Param() params: GetSubscriptionByUserDto,
+  @Req() req: IRequest,
+): Promise<Subscription> {
+  if (req.user._id.toString() === params.id 
+      || req.user.role === 'admin') {
+    return this.subscriptionService.findByUser(params.id)
+  }
+  throw new ForbiddenException()
+}
+\end{lstlisting}
+
+\subsubsection{Update Subscription (Admin Only)}
+
+\begin{lstlisting}[language=TypeScript, caption={Update Subscription Endpoint}]
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.Admin)
+@Put('/user/:id')
+updateSubscriptionByUser(
+  @Body() body: UpdateSubscriptionByUserDto,
+  @Param() params: GetSubscriptionByUserDto,
+): Promise<Subscription> {
+  const endDate = new Date(body.endDate)
+  
+  if (endDate < new Date()) {
+    throw new UnprocessableEntityException(
+      'End date must not be before today'
+    )
+  }
+
+  const updatePayload = {
+    endDate: new Date(body.endDate),
+    'quota.batchDuration': body.batchDuration,
+    'quota.liveDuration': body.liveDuration,
+  }
+
+  return this.subscriptionService.updateByUser(
+    params.id, updatePayload
+  )
+}
+\end{lstlisting}

@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant C as Component
+    participant HTTP as Axios HTTP
+    participant REQ as Request Interceptor
+    participant RES as Response Interceptor
+    participant AS as AuthService
+    participant BE as Backend
+    
+    C->>HTTP: Make Request
+    HTTP->>REQ: Process Request
+    REQ->>AS: getAccessToken()
+    AS-->>REQ: token
+    REQ->>REQ: Add Authorization header
+    
+    REQ->>BE: Send Request
+    BE-->>RES: Response
+    
+    alt Status 200
+        RES-->>C: Return data
+    else Status 401
+        RES->>AS: refreshToken()
+        alt Refresh Success
+            AS-->>RES: New token
+            RES->>AS: storeAuthData()
+            RES->>BE: Retry with new token
+            BE-->>RES: Response
+            RES-->>C: Return data
+        else Refresh Failed
+            RES->>AS: clearAuthData()
+            RES->>RES: Redirect to SignIn
+        end
+    else Other Error
+        RES->>RES: Show snackbar
+        RES-->>C: Reject with error
+    end

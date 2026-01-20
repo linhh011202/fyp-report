@@ -1,0 +1,144 @@
+\section{Authentication Frontend}
+\label{sec:frontend_auth}
+
+The frontend authentication system supports three login methods: email/password, Google OAuth, and Apple Sign-In.
+
+\subsection{Auth Service Architecture}
+
+The \texttt{AuthService} manages all authentication operations and token storage.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{6cm}|}
+\hline
+\textbf{Method} & \textbf{Description} \\
+\hline
+\texttt{login()} & Email/password authentication \\
+\hline
+\texttt{register()} & New account registration \\
+\hline
+\texttt{initiateGoogleLogin()} & Redirect to Google OAuth \\
+\hline
+\texttt{initiateAppleLogin()} & Apple SDK sign-in flow \\
+\hline
+\texttt{refreshToken()} & Refresh expired JWT \\
+\hline
+\texttt{storeAuthData()} & Store token in localStorage \\
+\hline
+\texttt{clearAuthData()} & Clear token on logout \\
+\hline
+\end{tabular}
+\caption{Auth Service Methods}
+\label{tab:auth_service_methods}
+\end{table}
+
+\subsection{Token Storage}
+
+Authentication data is stored in localStorage for persistence:
+
+\begin{lstlisting}[language=TypeScript, caption={LocalStorage Token Schema}]
+{
+  accessToken: "eyJhbGciOiJIUzI1NiIs...",
+  jwt: "eyJhbGciOiJIUzI1NiIs...",   // backward compat
+  subscriptionEnd: "1737244800000",  // Unix timestamp
+  isVerified: "true"
+}
+\end{lstlisting}
+
+\subsection{Email/Password Login}
+
+\begin{lstlisting}[language=TypeScript, caption={Login Implementation}]
+async login({ email, password }) {
+  const response = await http.post('/auth/login', { 
+    email, password 
+  })
+  
+  const { accessToken, subscriptionEnd, isVerified } = 
+    response.data
+  
+  this.storeAuthData(accessToken, subscriptionEnd, isVerified)
+  return response.data
+}
+\end{lstlisting}
+
+\subsection{OAuth Integration}
+
+\subsubsection{Google OAuth}
+
+Google OAuth uses redirect-based authentication:
+
+\begin{lstlisting}[language=TypeScript, caption={Google OAuth Initiation}]
+initiateGoogleLogin() {
+  const frontendUrl = encodeURIComponent(window.location.origin)
+  const redirectUrl = `${API_URL}/auth/google/login` + 
+    `?redirect=${frontendUrl}/sign-in`
+  
+  window.location.href = redirectUrl
+}
+\end{lstlisting}
+
+\subsubsection{Apple Sign-In}
+
+Apple Sign-In uses the Apple SDK:
+
+\begin{lstlisting}[language=TypeScript, caption={Apple Sign-In Initialization}]
+initializeAppleSignIn(clientId) {
+  if (!window.AppleID) {
+    console.warn('Apple SDK not loaded')
+    return false
+  }
+
+  window.AppleID.auth.init({
+    clientId: clientId || process.env.VUE_APP_APPLE_CLIENT_ID,
+    scope: 'name email',
+    redirectURI: `${API_URL}/auth/apple/callback`,
+    usePopup: false
+  })
+  return true
+}
+
+async initiateAppleLogin() {
+  await window.AppleID.auth.signIn()
+}
+\end{lstlisting}
+
+\subsection{Complete Signup Flow}
+
+New OAuth users must complete signup by setting a password:
+
+\begin{lstlisting}[language=TypeScript, caption={Complete Signup Implementation}]
+async setPassword(temporaryToken, password, fullname) {
+  const response = await http.post('/auth/add-info', {
+    token: temporaryToken,
+    password,
+    fullname
+  })
+  
+  const { accessToken, subscriptionEnd, isVerified } = 
+    response.data
+  this.storeAuthData(accessToken, subscriptionEnd, isVerified)
+  
+  localStorage.removeItem('temporaryToken')
+  return response.data
+}
+\end{lstlisting}
+
+\subsection{Auth Mixin}
+
+The auth mixin provides authentication state to components:
+
+\begin{lstlisting}[language=TypeScript, caption={Auth Mixin Usage}]
+import { authMixin } from '@/mixins/auth.mixin'
+
+export default {
+  mixins: [authMixin],
+  // Component now has access to:
+  // - this.isAuthenticated
+  // - this.accessToken
+  // - this.subscriptionEnd
+  // - this.logout()
+  // - this.verifyAndRefreshToken()
+}
+\end{lstlisting}
+
+The mixin automatically starts token verification on mount and cleans up on destroy.

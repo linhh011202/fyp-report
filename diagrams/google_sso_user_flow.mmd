@@ -1,0 +1,28 @@
+flowchart TD
+    A[User clicks Sign in with Google] --> B[GET /auth/google/login]
+    B --> C[GoogleAuthGuard encodes state parameter]
+    C --> D[Redirect to Google OAuth]
+    D --> E[User consents on Google]
+    E --> F[Google redirects to /auth/google/callback]
+    F --> G[GoogleStrategy extracts profile]
+    G --> H[Decode state parameter]
+    H --> I{User exists?}
+    
+    I -->|No - New User| J[Generate temporaryToken]
+    J --> K[Redirect to /complete-signup]
+    K --> L[User sets password]
+    L --> M[Create user account]
+    M --> N[Generate access token]
+    N --> O[Store in UserTokens]
+    O --> P[Redirect to /sign-in]
+    
+    I -->|Yes - Existing User| Q[Revoke all existing tokens]
+    Q --> R[Add old tokens to blacklist]
+    R --> S[Generate new access token]
+    S --> T[Store in UserTokens]
+    T --> U[Set localStorage with token]
+    U --> V[Redirect to /sign-in]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style P fill:#6f6,stroke:#333,stroke-width:2px
+    style V fill:#6f6,stroke:#333,stroke-width:2px

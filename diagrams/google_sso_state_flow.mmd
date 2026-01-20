@@ -1,0 +1,34 @@
+sequenceDiagram
+    participant Request as HTTP Request
+    participant Guard as GoogleAuthGuard
+    participant State as State Manager
+    participant OAuth as Google OAuth
+    participant Callback as Callback Handler
+
+    Note over Request,Guard: Initial Login Request
+    Request->>Guard: GET /auth/google/login?redirect=...&appId=...
+    Guard->>Guard: getAuthenticateOptions(context)
+    Guard->>State: Extract query params
+    State->>State: Create state object
+    Note over State: {redirect, appId, appSecret}
+    State->>State: base64 encode
+    Guard->>OAuth: Redirect with state param
+
+    rect rgb(240, 240, 240)
+        Note over OAuth: Google OAuth Flow
+        OAuth->>OAuth: User authenticates
+        OAuth->>OAuth: User consents
+    end
+
+    OAuth->>Callback: GET /callback?code=...&state=...
+    Callback->>Guard: Validate OAuth response
+    Guard->>State: Decode state parameter
+    State->>State: base64 decode
+    State->>State: JSON parse
+    State-->>Callback: {redirect, appId, appSecret}
+    
+    Note over Callback: State preserved through OAuth flow
+    Callback->>Callback: Use restored params for:
+    Note over Callback: 1. Redirect URL construction
+    Note over Callback: 2. App credentials for token generation
+    Note over Callback: 3. Multi-tenant support

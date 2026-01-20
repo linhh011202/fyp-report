@@ -1,0 +1,37 @@
+flowchart TD
+    A[Token Received] --> B{Check TokenBlacklist}
+    
+    B -->|Found| C[Token Revoked]
+    C --> D[Return 401 Unauthorized]
+    
+    B -->|Not Found| E{Verify JWT Signature}
+    
+    E -->|Invalid| F[Invalid Signature]
+    F --> D
+    
+    E -->|Valid| G{Check Expiration}
+    
+    G -->|Expired| H[Token Expired]
+    H --> I{Refresh Requested?}
+    I -->|Yes| J[Generate New Token]
+    J --> K[Blacklist Old Token]
+    K --> L[Return New Token]
+    I -->|No| D
+    
+    G -->|Valid| M{Check UserTokens}
+    
+    M -->|Not Found| N[Session Invalidated]
+    N --> D
+    
+    M -->|Found| O{Verify User Exists}
+    
+    O -->|No| P[User Deleted]
+    P --> D
+    
+    O -->|Yes| Q[Token Valid]
+    Q --> R[Return User Info]
+    
+    style A fill:#e3f2fd,stroke:#1976d2
+    style D fill:#ffebee,stroke:#c62828
+    style R fill:#e8f5e9,stroke:#388e3c
+    style L fill:#e8f5e9,stroke:#388e3c

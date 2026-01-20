@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant Controller as AppleSSOController
+    participant Library as apple-signin-auth
+    participant Fallback as AuthService.verifyAppleToken
+    participant JWT as JWT Decoder
+    
+    Controller->>Controller: Receive id_token from request body
+    
+    rect rgb(200, 230, 200)
+        Note over Controller,Library: Primary Verification Path
+        Controller->>Library: verifyIdToken(id_token, {audience: APPLE_CLIENT_ID})
+        Library->>Library: Fetch Apple JWKS
+        Library->>Library: Verify JWT signature
+        Library->>Library: Check token expiration
+        Library-->>Controller: {email, sub, aud, iss, ...}
+    end
+    
+    alt Primary verification fails
+        rect rgb(255, 230, 200)
+            Note over Controller,Fallback: Fallback Verification Path
+            Controller->>Fallback: verifyAppleToken(id_token)
+            Fallback->>JWT: decode(token, {complete: true})
+            JWT-->>Fallback: {header, payload}
+            
+            Note over Fallback: Validation Steps
+            Fallback->>Fallback: Check issuer == "https://appleid.apple.com"
+            Fallback->>Fallback: Check token expiration
+            Fallback->>Fallback: Match audience with configured client IDs
+            
+            alt Validation passes
+                Fallback-->>Controller: payload
+            else Validation fails
+                Fallback-->>Controller: UnauthorizedException
+            end
+        end
+    end

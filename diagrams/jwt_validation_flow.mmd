@@ -1,0 +1,39 @@
+sequenceDiagram
+    participant Client
+    participant Guard as JwtAuthGuard
+    participant Strategy as JwtStrategy
+    participant JWT as JwtService
+    participant App as ApplicationService
+    participant User as UserService
+    participant Keys as Key Store
+
+    Client->>Guard: Request with Bearer token
+    Guard->>Strategy: Validate token
+    Strategy->>JWT: decode(token)
+    JWT-->>Strategy: {sub, aud, ...}
+    
+    alt Has audience (third-party app)
+        Strategy->>App: findById(aud)
+        App-->>Strategy: Application with Key
+        Strategy->>Keys: Get app's publicKey
+    else No audience (default)
+        Strategy->>Keys: Get default publicKey
+    end
+    
+    Keys-->>Strategy: publicKey
+    Strategy->>JWT: verify(token, publicKey)
+    
+    alt Invalid signature
+        Strategy-->>Client: 401 Unauthorized
+    end
+    
+    JWT-->>Strategy: Decoded payload
+    Strategy->>User: findById(payload.sub)
+    
+    alt User not found
+        Strategy-->>Client: 401 Unauthorized
+    end
+    
+    User-->>Strategy: User document
+    Strategy-->>Guard: User object
+    Guard-->>Client: Request proceeds

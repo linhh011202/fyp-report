@@ -7,7 +7,7 @@ The Gateway Dashboard implements a comprehensive authentication system supportin
 
 The system supports three authentication methods:
 
-\begin{table}[!ht]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{6cm}|}
 \hline
@@ -28,7 +28,7 @@ Apple Sign-In & Apple & Authentication via identity token verification \\
 
 Figure~\ref{fig:sso_architecture} illustrates the overall architecture of the authentication modules.
 
-\begin{figure}[!ht]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.75\textwidth]{images/sso_architecture.png}
 \caption{Authentication Module Architecture}
@@ -39,7 +39,12 @@ The architecture consists of three main components:
 
 \begin{itemize}
     \item \textbf{SSO Modules}: GoogleSSOController and AppleSSOController handle OAuth flows with their respective providers.
-    \item \textbf{Auth Module}: Central AuthService provides shared functionality including \texttt{checkUserByEmail()}, \texttt{generateTemporaryToken()}, and \texttt{revokeAllUserTokens()}.
+    \item \textbf{Auth Module}: Central AuthService provides shared functionality including:
+    \begin{itemize}
+        \item \texttt{checkUserByEmail()}
+        \item \texttt{generateTemporaryToken()}
+        \item \texttt{revokeAllUserTokens()}
+    \end{itemize}
     \item \textbf{Storage Layer}: UserTokens collection stores active sessions; TokenBlacklist stores revoked tokens; Users collection stores account data.
 \end{itemize}
 

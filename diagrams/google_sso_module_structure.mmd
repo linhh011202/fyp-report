@@ -1,0 +1,61 @@
+flowchart TB
+    subgraph Google["Google SSO Module"]
+        direction TB
+        GSC[GoogleSSOController]
+        GAG[GoogleAuthGuard]
+        GS[GoogleStrategy]
+        EP1["/auth/google/login"]
+        EP2["/auth/google/callback"]
+        GSC --> EP1
+        GSC --> EP2
+        EP1 --> GAG
+        EP2 --> GAG
+        GAG --> GS
+    end
+
+    subgraph Passport["Passport Integration"]
+        PM[PassportModule]
+        PG[passport-google-oauth20]
+        PM --> PG
+    end
+
+    subgraph AuthMod["Auth Module (Shared)"]
+        direction TB
+        AS[AuthService]
+        CUE["checkUserByEmail()"]
+        GTT["generateTemporaryToken()"]
+        RAT["revokeAllUserTokens()"]
+        LGN["login()"]
+        AS --> CUE
+        AS --> GTT
+        AS --> RAT
+        AS --> LGN
+    end
+
+    subgraph Config["Configuration"]
+        ACM[AuthConfigModule]
+        AC["authConfig"]
+        ACM --> AC
+    end
+
+    subgraph External["External Services"]
+        GO["Google OAuth 2.0 Server"]
+    end
+
+    subgraph Storage["MongoDB Collections"]
+        UT[(UserTokens)]
+        TB[(TokenBlacklist)]
+        US[(Users)]
+    end
+
+    GS --> PM
+    GS --> ACM
+    GS --> GO
+    
+    GSC --> AS
+    CUE --> US
+    CUE -->|new user| GTT
+    CUE -->|existing user| RAT
+    RAT --> TB
+    RAT --> UT
+    LGN --> UT

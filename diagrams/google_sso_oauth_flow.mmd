@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant Guard as GoogleAuthGuard
+    participant Strategy as GoogleStrategy
+    participant OAuth as passport-google-oauth20
+    participant Google as Google OAuth Server
+    participant Config as AuthConfig
+
+    Note over Guard: Request to /auth/google/login
+    Guard->>Guard: getAuthenticateOptions(context)
+    Guard->>Guard: Extract query params (redirect, appId, appSecret, prompt)
+    Guard->>Guard: Encode state = base64(JSON.stringify({redirect, appId, appSecret}))
+    
+    Guard->>Strategy: Initiate authentication
+    Strategy->>Config: Get credentials
+    Config-->>Strategy: {clientID, clientSecret, callbackURL}
+    
+    Strategy->>OAuth: Configure OAuth client
+    OAuth->>Google: Redirect to consent screen
+    Note over OAuth,Google: URL includes: scope=[email, profile], state, prompt, access_type=offline
+    
+    rect rgb(200, 230, 200)
+        Note over Google: User Authentication
+        Google->>Google: Display consent screen
+        Google->>Google: User approves access
+    end
+    
+    Google-->>OAuth: Authorization code
+    OAuth->>Google: Exchange code for tokens
+    Google-->>OAuth: access_token, refresh_token, id_token
+    
+    OAuth->>Strategy: Callback with profile
+    Strategy->>Strategy: validate(req, accessToken, refreshToken, profile)
+    Strategy->>Strategy: Extract {email, firstName, lastName, picture}
+    Strategy-->>Guard: User object
+    
+    Guard-->>Guard: Attach user to request.user
+    Note over Guard: Proceed to callback handler

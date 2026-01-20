@@ -1,0 +1,30 @@
+flowchart TD
+    A[User taps Sign in with Apple] --> B[iOS/Web App authenticates with Apple]
+    B --> C[Apple returns id_token JWT]
+    C --> D[POST /auth/apple/callback]
+    D --> E{Verify id_token}
+    
+    E -->|Success| F[Extract email from payload]
+    E -->|Failure| Z[Return 401 Unauthorized]
+    
+    F --> G{User exists?}
+    
+    G -->|No - New User| H[Generate temporaryToken]
+    H --> I[Redirect to /complete-signup]
+    I --> J[User sets password]
+    J --> K[Create user account]
+    K --> L[Generate access token]
+    L --> M[Store in UserTokens]
+    M --> N[Redirect to /sign-in]
+    
+    G -->|Yes - Existing User| O[Revoke all existing tokens]
+    O --> P[Add old tokens to blacklist]
+    P --> Q[Generate new access token]
+    Q --> R[Store in UserTokens]
+    R --> S[Set localStorage with token]
+    S --> T[Redirect to /sign-in]
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style Z fill:#f66,stroke:#333,stroke-width:2px
+    style N fill:#6f6,stroke:#333,stroke-width:2px
+    style T fill:#6f6,stroke:#333,stroke-width:2px

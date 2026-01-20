@@ -1,0 +1,43 @@
+sequenceDiagram
+    participant Client
+    participant Controller as AuthController
+    participant Guard as JwtAuthGuard
+    participant Strategy as JwtStrategy
+    participant Service as AuthService
+    participant JWT as JwtService
+    participant TB as TokenBlacklist
+    participant UT as UserTokens
+
+    Client->>Controller: POST /auth/logout
+    Note over Client,Controller: Header: Authorization: Bearer {token}
+    
+    Controller->>Guard: Validate request
+    Guard->>Strategy: Extract & validate token
+    Strategy->>JWT: verify(token)
+    JWT-->>Strategy: Decoded payload
+    Strategy-->>Guard: User object
+    Guard-->>Controller: Request authorized
+    
+    Controller->>Controller: Extract token from header
+    Note over Controller: token = header.replace('Bearer ', '')
+    
+    Controller->>Service: logout(token, userId)
+    
+    Service->>JWT: decode(token)
+    JWT-->>Service: {sub, exp, ...}
+    
+    Service->>TB: create({...})
+    Note over TB: token: current token
+    Note over TB: userId: user._id
+    Note over TB: expiresAt: decoded.exp
+    Note over TB: reason: 'logout'
+    
+    TB-->>Service: Blacklist entry created
+    
+    Service->>UT: deleteOne({token})
+    Note over UT: Active session removed
+    
+    UT-->>Service: Deleted
+    
+    Service-->>Controller: void
+    Controller-->>Client: {statusCode: 200, message: "Logged out successfully"}

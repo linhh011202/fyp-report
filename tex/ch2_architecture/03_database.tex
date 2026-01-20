@@ -11,7 +11,7 @@ The system utilizes the following primary collections:
 
 The \texttt{users} collection stores user account information and authentication credentials.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{6cm}|}
 \hline
@@ -40,7 +40,7 @@ isVerified & Boolean & Email verification status \\
 
 The \texttt{subscriptions} collection tracks user subscriptions and quota usage.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{6cm}|}
 \hline
@@ -75,7 +75,7 @@ The \texttt{quota} and \texttt{usage} fields store nested objects tracking batch
 
 The \texttt{plans} collection maintains versioned service plans.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{6cm}|}
 \hline
@@ -106,7 +106,7 @@ To ensure secure session management, two additional collections were introduced:
 
 The \texttt{usertokens} collection tracks active JWT tokens for each user.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{6cm}|}
 \hline
@@ -135,7 +135,7 @@ MongoDB's TTL (Time-To-Live) index on \texttt{expiresAt} automatically removes e
 
 The \texttt{tokenblacklists} collection stores revoked tokens to prevent reuse.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{6cm}|}
 \hline
@@ -166,7 +166,7 @@ Figure~\ref{fig:er_diagram} illustrates the relationships between core collectio
     \item Revoked tokens are stored in \texttt{tokenblacklist}.
 \end{itemize}
 
-\begin{figure}[!ht]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.75\textwidth]{images/er_diagram.png}
 \caption{Entity Relationship Diagram}

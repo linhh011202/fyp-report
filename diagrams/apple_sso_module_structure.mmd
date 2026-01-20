@@ -1,0 +1,47 @@
+flowchart TB
+    subgraph Apple["Apple SSO Module"]
+        direction TB
+        ASC[AppleSSOController]
+        EP["/auth/apple/callback"]
+        ASC --> EP
+    end
+
+    subgraph AuthMod["Auth Module (Shared)"]
+        direction TB
+        AS[AuthService]
+        VAT["verifyAppleToken()"]
+        CUE["checkUserByEmail()"]
+        GTT["generateTemporaryToken()"]
+        RAT["revokeAllUserTokens()"]
+        LGN["login()"]
+        AS --> VAT
+        AS --> CUE
+        AS --> GTT
+        AS --> RAT
+        AS --> LGN
+    end
+
+    subgraph External["External Dependencies"]
+        ASL["apple-signin-auth library"]
+        APPLE["Apple Identity Service"]
+    end
+
+    subgraph Storage["MongoDB Collections"]
+        UT[(UserTokens)]
+        TB[(TokenBlacklist)]
+        US[(Users)]
+    end
+
+    ASC --> ASL
+    ASL --> APPLE
+    ASC -.->|fallback| VAT
+    
+    ASC --> CUE
+    CUE --> US
+    
+    CUE -->|new user| GTT
+    CUE -->|existing user| RAT
+    RAT --> TB
+    RAT --> UT
+    CUE -->|existing user| LGN
+    LGN --> UT

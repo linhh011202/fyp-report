@@ -1,0 +1,52 @@
+sequenceDiagram
+    participant Client
+    participant Controller as AuthController
+    participant Service as AuthService
+    participant JWT as JwtService
+    participant TB as TokenBlacklist
+    participant UT as UserTokens
+    participant User as UserService
+    participant Sub as SubscriptionService
+
+    Client->>Controller: POST /auth/refresh-token
+    Note over Client,Controller: Body: {token: "expired_jwt"}
+    
+    Controller->>Service: refreshAccessToken(token)
+    
+    Service->>JWT: decode(token)
+    JWT-->>Service: {sub, email, role, exp, ...}
+    
+    Service->>TB: findOne({token})
+    alt Token blacklisted
+        TB-->>Service: Found
+        Service-->>Client: 401 Token has been revoked
+    end
+    TB-->>Service: Not found
+    
+    Service->>JWT: verifyAsync(token, {ignoreExpiration: true})
+    alt Invalid signature
+        JWT-->>Service: Error
+        Service-->>Client: 401 Invalid token
+    end
+    JWT-->>Service: Valid signature
+    
+    Service->>User: findById(decoded.sub)
+    alt User not found
+        User-->>Service: null
+        Service-->>Client: 401 User not found
+    end
+    User-->>Service: User document
+    
+    Service->>TB: create({token, userId, reason: 'refresh'})
+    Note over TB: Old token blacklisted
+    
+    Service->>JWT: sign(newPayload, {subject: userId})
+    JWT-->>Service: newToken
+    
+    Service->>UT: create({userId, token: newToken, ...})
+    Note over UT: New token stored
+    
+    Service->>Sub: findByUser(userId)
+    Sub-->>Service: Subscription info
+    
+    Service-->>Client: {accessToken, subscriptionEnd, isVerified}

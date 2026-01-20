@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph Controller["AuthController"]
+        L["/auth/login"]
+        LO["/auth/logout"]
+        VT["/auth/verify-token"]
+        RT["/auth/refresh-token"]
+    end
+
+    subgraph Guards["Passport Guards"]
+        LAG[LocalAuthGuard]
+        JAG[JwtAuthGuard]
+    end
+
+    subgraph Strategies["Passport Strategies"]
+        LS[LocalStrategy]
+        JS[JwtStrategy]
+    end
+
+    subgraph Service["AuthService"]
+        LOGIN["login()"]
+        LOGOUT["logout()"]
+        VERIFY["verifyAccessToken()"]
+        REFRESH["refreshAccessToken()"]
+        REVOKE["revokeAllUserTokens()"]
+    end
+
+    subgraph JWT["JwtModule"]
+        SIGN["jwtService.sign()"]
+        DECODE["jwtService.decode()"]
+        VERIFYJWT["jwtService.verify()"]
+    end
+
+    subgraph Storage["MongoDB Collections"]
+        UT[(UserTokens)]
+        TB[(TokenBlacklist)]
+        US[(Users)]
+    end
+
+    L --> LAG --> LS
+    LS --> US
+    L --> LOGIN
+    LOGIN --> REVOKE --> TB
+    LOGIN --> SIGN --> UT
+
+    LO --> JAG --> JS
+    JS --> US
+    LO --> LOGOUT --> TB
+
+    VT --> VERIFY
+    VERIFY --> TB
+    VERIFY --> VERIFYJWT
+    VERIFY --> UT
+
+    RT --> REFRESH
+    REFRESH --> DECODE
+    REFRESH --> TB
+    REFRESH --> SIGN --> UT

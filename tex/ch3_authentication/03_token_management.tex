@@ -1,11 +1,31 @@
 \section{Token Management}
 \label{sec:token_management}
 
-This section covers the JWT token lifecycle, including the API endpoints for token operations.
+This section covers the JWT token lifecycle, including the API endpoints for token operations and the Auth module architecture.
+
+\subsection{Auth Module Architecture}
+
+Figure~\ref{fig:auth_module_architecture} shows the architecture of the Auth module, including the relationships between controllers, guards, strategies, services, and storage.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/auth_module_architecture.png}
+\caption{Auth Module Architecture}
+\label{fig:auth_module_architecture}
+\end{figure}
+
+The module consists of:
+\begin{itemize}
+    \item \textbf{AuthController}: Exposes endpoints for login, logout, token verification, and token refresh.
+    \item \textbf{Guards}: LocalAuthGuard for credential-based login, JwtAuthGuard for protected endpoints.
+    \item \textbf{Strategies}: LocalStrategy validates email/password, JwtStrategy validates JWT tokens with dynamic key selection.
+    \item \textbf{AuthService}: Core business logic for token operations.
+    \item \textbf{Storage}: UserTokens tracks active sessions, TokenBlacklist stores revoked tokens.
+\end{itemize}
 
 \subsection{Token Lifecycle Overview}
 
-\begin{table}[!ht]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|p{5.5cm}|}
 \hline
@@ -23,6 +43,15 @@ Revocation & POST /auth/logout & Adds token to blacklist immediately \\
 \caption{Token Lifecycle Stages}
 \label{tab:token_lifecycle}
 \end{table}
+
+Figure~\ref{fig:token_lifecycle} illustrates the complete token lifecycle sequence.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/token_lifecycle.png}
+\caption{Token Lifecycle Sequence}
+\label{fig:token_lifecycle}
+\end{figure}
 
 \subsection{Token Generation}
 
@@ -60,6 +89,15 @@ async login(user, userAgent, ipAddress) {
 
 \subsection{Token Verification}
 
+The verification process involves multiple validation steps. Figure~\ref{fig:token_verification_flow} shows the complete decision tree.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{images/token_verification_flow.png}
+\caption{Token Verification Decision Flow}
+\label{fig:token_verification_flow}
+\end{figure}
+
 The verification endpoint checks blacklist status, signature validity, and active session existence:
 
 \begin{lstlisting}[language=TypeScript, caption={Token Verification}]
@@ -85,7 +123,33 @@ async verifyToken(token: string) {
 }
 \end{lstlisting}
 
+\subsection{JWT Validation with Dynamic Keys}
+
+The JwtStrategy supports multi-tenant authentication with dynamic key selection. Figure~\ref{fig:jwt_validation_flow} shows this process.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/jwt_validation_flow.png}
+\caption{JWT Validation with Dynamic Key Selection}
+\label{fig:jwt_validation_flow}
+\end{figure}
+
+The strategy determines which public key to use based on the token's audience claim:
+\begin{itemize}
+    \item \textbf{Default tokens}: Use the platform's default public key.
+    \item \textbf{Third-party app tokens}: Use the application's specific public key for verification.
+\end{itemize}
+
 \subsection{Token Refresh}
+
+The token refresh process allows clients to obtain a new access token using an expired token, provided the signature is valid. Figure~\ref{fig:token_refresh_flow} illustrates this flow.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/token_refresh_flow.png}
+\caption{Token Refresh Flow}
+\label{fig:token_refresh_flow}
+\end{figure}
 
 Refresh enables session continuation with expired tokens (signature must still be valid):
 
@@ -117,6 +181,15 @@ async refreshAccessToken(expiredToken: string) {
 \end{lstlisting}
 
 \subsection{Token Revocation (Logout)}
+
+The logout process involves removing the active session and blacklisting the current token. Figure~\ref{fig:token_revocation_flow} details this sequence.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/token_revocation_flow.png}
+\caption{Token Revocation (Logout) Flow}
+\label{fig:token_revocation_flow}
+\end{figure}
 
 \begin{lstlisting}[language=TypeScript, caption={Logout Implementation}]
 async logout(token: string, userId: string) {

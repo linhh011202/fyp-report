@@ -1,0 +1,54 @@
+sequenceDiagram
+    participant Client
+    participant Controller as AuthController
+    participant Service as AuthService
+    participant JWT as JwtService
+    participant UT as UserTokens
+    participant TB as TokenBlacklist
+
+    rect rgb(200, 230, 200)
+        Note over Client,TB: Token Generation (Login)
+        Client->>Controller: POST /auth/login
+        Controller->>Service: login(user)
+        Service->>Service: revokeAllUserTokens(userId)
+        Service->>TB: Insert old tokens
+        Service->>UT: Delete old tokens
+        Service->>JWT: sign(payload)
+        JWT-->>Service: token
+        Service->>UT: Create new token record
+        Service-->>Client: {accessToken}
+    end
+
+    rect rgb(230, 230, 200)
+        Note over Client,TB: Token Verification
+        Client->>Controller: POST /auth/verify-token
+        Controller->>Service: verifyAccessToken(token)
+        Service->>TB: Check blacklist
+        alt Token blacklisted
+            Service-->>Client: {valid: false}
+        end
+        Service->>JWT: verify(token)
+        Service->>UT: Check active session
+        Service-->>Client: {valid: true, user}
+    end
+
+    rect rgb(230, 200, 200)
+        Note over Client,TB: Token Refresh
+        Client->>Controller: POST /auth/refresh-token
+        Controller->>Service: refreshAccessToken(token)
+        Service->>JWT: decode(token)
+        Service->>JWT: verify(token, ignoreExpiration)
+        Service->>TB: Blacklist old token
+        Service->>JWT: sign(newPayload)
+        Service->>UT: Create new token record
+        Service-->>Client: {accessToken: newToken}
+    end
+
+    rect rgb(200, 200, 230)
+        Note over Client,TB: Logout
+        Client->>Controller: POST /auth/logout
+        Controller->>Service: logout(token, userId)
+        Service->>TB: Add to blacklist
+        Service->>UT: Delete token record
+        Service-->>Client: {message: "Logged out"}
+    end

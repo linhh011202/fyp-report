@@ -2,57 +2,97 @@
 \label{chap:introduction}
 
 \section{Background}
-In the rapidly evolving landscape of speech processing technologies, the \textbf{Speech Gateway API} serves as a critical infrastructure for delivering advanced speech services to various applications. As the demand for these services grows, the need for a robust, centralized management system becomes paramount. Traditionally, interacting with such APIs required direct integration and manual management, which can be inefficient for end-users and administrators alike.
+In the rapidly evolving landscape of speech processing technologies, the \textbf{Speech Gateway API} serves as a critical infrastructure for delivering advanced speech services to various applications. \textbf{Speech Gateway} is a backend service that provides Speech-to-Text (STT) capabilities to end users through a secured API. It acts as a \textbf{middle layer} between client applications and an underlying Speech Engine. Instead of allowing clients to call the speech engine directly, Speech Gateway centralizes authentication, access control, token issuance, and (in this project) subscription/payment management.
 
-The \textbf{Gateway Dashboard} project was initiated to bridge this gap, providing a user-friendly graphical interface that empowers users to manage their speech processing tasks while giving administrators the tools needed to oversee system operations, manage users, and monetize services effectively.
+As the demand for these services grows, the need for a robust, centralized management system becomes paramount. Traditionally, interacting with such APIs required direct integration and manual management, which can be inefficient for end-users and administrators alike. The \textbf{Gateway Dashboard} project was initiated to bridge this gap, providing a user-friendly graphical interface that empowers users to manage their speech processing tasks while giving administrators the tools needed to oversee system operations, manage users, and monetize services effectively.
 
 \section{Problem Statement}
 Prior to this project, the Speech Gateway ecosystem faced several challenges:
 \begin{enumerate}
-    \item \textbf{Lack of User Interface:} Users had to rely on raw API calls or command-line tools to interact with speech services, which posed a high barrier to entry.
+
     \item \textbf{Limited Access Control:} The existing system lacked a flexible authentication mechanism, supporting only basic credentials without modern Single Sign-On (SSO) capabilities.
     \item \textbf{Absence of Monetization Infrastructure:} There was no automated system to handle subscriptions, billing, or tiered access plans, hindering the commercial viability of the services.
-    \item \textbf{Inefficient Administration:} Managing user accounts, permissions, and service plans required manual database interventions, which is not scalable.
+
 \end{enumerate}
 
 \section{Project Objectives}
 The primary objective of this project is to design and implement a comprehensive \textbf{Gateway Dashboard} and enhance the backend infrastructure to support commercial-grade features. Specific objectives include:
 
 \begin{itemize}
-    \item \textbf{Develop a web-based dashboard} using Vue.js and Vuetify to provide an intuitive interface for users to access speech services and manage their data.
-    \item \textbf{Implement a secure authentication system} supporting standard Email/Password login as well as OAuth 2.0 providers (Google) and Apple Sign-In for seamless user onboarding.
-    \item \textbf{Design a subscription and payment module} integrating Stripe to handle recurring billing, automated invoicing, and subscription lifecycle management.
-    \item \textbf{Create an administrative portal} for managing pricing plans, monitoring system usage, and overseeing user accounts with Role-Based Access Control (RBAC).
-    \item \textbf{Enhance system security} through a robust token management system, including token blacklisting and session control using Redis.
+    \item \textbf{SSO Integration:} Implement secure Single Sign-On (Google, Apple) to streamline user authentication, reduce credential fatigue, and centralize identity management across services.
+   
+    \item \textbf{Payment Portal:
+    }Design a subscription and payment module integrating Stripe to handle recurring billing, automated invoicing, and subscription lifecycle management.
+    
+    \item \textbf{Frontend Development:} Develop a web-based dashboard using Vue.js and Vuetify to provide an intuitive interface for users to access speech services and manage their data.
+
 \end{itemize}
 
 \section{Project Scope}
-The project scope encompasses both frontend and backend development:
+The project scope encompasses three major components: Single Sign-On (SSO) Authentication, Payment \& Subscription Management, and Frontend Dashboard Development. Each component involves both frontend and backend implementation as detailed below.
 
-\subsection{Frontend Development}
-The frontend is built as a Single Page Application (SPA) using the \textbf{Vue.js 2} framework with \textbf{Vuetify} for UI components. Key deliverables include:
+\subsection{Single Sign-On (SSO) Authentication}
+This component enables users to authenticate using their existing Google or Apple accounts, eliminating the need for separate credentials.
+
+\subsubsection{Backend Implementation (NestJS)}
 \begin{itemize}
-    \item Public pages for Authentication (Sign In, Sign Up, OAuth handling).
-    \item User Dashboard for subscription management and service usage.
-    \item Admin Dashboard for plans management (JSON editor with validation) and system monitoring.
-    \item Navigation guards and interceptors for secure routing and API communication.
+    \item \textbf{Google SSO Module:} OAuth 2.0 integration with Google Sign-In using Passport.js strategies, handling authorization code flow with state management for CSRF protection.
+    \item \textbf{Apple SSO Module:} Integration with Apple Sign In, including token verification and privacy-preserving email relay support.
+    \item \textbf{JWT Token Management:} Generation and validation of access tokens (15-minute expiry) and refresh tokens with secure cookie storage (HttpOnly, Secure, SameSite attributes).
+    \item \textbf{Token Blacklisting:} Redis-based blacklist for immediate token revocation on user logout or security events.
+    \item \textbf{Traditional Auth:} Email/password authentication with bcrypt hashing as fallback option.
 \end{itemize}
 
-\subsection{Backend Development}
-The backend enhancements are implemented within the existing \textbf{NestJS} API Gateway. The scope includes:
+\subsubsection{Frontend Implementation (Vue.js)}
 \begin{itemize}
-    \item \textbf{Auth Module:} Implementation of Google/Apple SSO strategies, JWT handling, and token security features (revocation, blacklisting).
-    \item \textbf{Payment Module:} Integration with Stripe API for checkout sessions, webhooks, and subscription synchronization.
-    \item \textbf{Plans Module:} A versioned, database-driven system for managing service plans with Redis caching for performance.
-    \item \textbf{Subscription Module:} Logic for quota tracking (batch/live durations) and access control based on subscription status.
+    \item \textbf{Authentication Pages:} Sign In, Sign Up, and OAuth callback handling pages.
+    \item \textbf{SSO Integration:} "Sign in with Google" and "Sign in with Apple" buttons with proper OAuth flow initiation.
+    \item \textbf{Token Management:} Automatic token refresh using interceptors, handling token expiration gracefully.
+    \item \textbf{Navigation Guards:} Route protection based on authentication status, redirecting unauthenticated users to login.
 \end{itemize}
 
-\section{Report Organization}
-The remainder of this report is organized as follows:
+\subsection{Payment \& Subscription Management}
+This component handles monetization through Stripe integration, enabling tiered subscription plans with usage-based quotas.
+
+\subsubsection{Backend Implementation (NestJS)}
 \begin{itemize}
-    \item \textbf{Chapter \ref{chap:architecture}}: Detailed overview of the system architecture and technology stack.
-    \item \textbf{Chapter \ref{chap:authentication}}: In-depth look at the authentication system, including SSO flows and security measures.
-    \item \textbf{Chapter \ref{chap:payment}}: Design and implementation of the subscription and payment processing system.
-    \item \textbf{Chapter \ref{chap:frontend}}: Description of the frontend component architecture and user interface design.
-    \item \textbf{Chapter \ref{chap:conclusion}}: Summary of the project achievements and suggestions for future work.
+    \item \textbf{Stripe Integration Module:} Checkout session creation, webhook handling for payment events (\texttt{checkout.session.completed}, \texttt{customer.subscription.updated/deleted}), webhook signature verification.
+    \item \textbf{Plans Module:} JSON-based plan configuration stored in MongoDB with versioning support, Redis caching for fast retrieval, admin API for plan updates with cache invalidation.
+    \item \textbf{Subscription Module:} User subscription tracking synchronized with Stripe, usage quota management (batch and live speech processing durations), access control middleware enforcing plan limits.
+    \item \textbf{Webhook Processing:} Idempotent event handling, automatic subscription creation/updates from Stripe events, cancellation and resumption logic.
+\end{itemize}
+
+\subsubsection{Frontend Implementation (Vue.js)}
+\begin{itemize}
+    \item \textbf{Subscription Page:} Display available plans with pricing fetched from Stripe API, plan comparison cards showing features and quotas, checkout button triggering Stripe Checkout session.
+    \item \textbf{User Dashboard:} Current subscription status and active plan display, usage quota tracking with visual progress indicators, cancel/resume subscription functionality.
+    \item \textbf{Admin Plans Management:} JSON editor for creating and updating service plans with real-time validation, version history tracking, preview of plan changes before publishing.
+    \item \textbf{Payment Success/Cancel Pages:} Post-checkout handling and user feedback.
+\end{itemize}
+
+\subsection{Frontend Dashboard Development}
+This component provides the complete user interface built as a Single Page Application (SPA) using \textbf{Vue.js 2} and \textbf{Vuetify}.
+
+\subsubsection{Core Frontend Architecture}
+\begin{itemize}
+    \item \textbf{Component Structure:} Reusable components (PlanCard, SubscriptionStatus, UserProfile), page components (Home, Subscription, Dashboard, Admin), layout components (AppBar, NavigationDrawer, Footer).
+    \item \textbf{Routing System:} Vue Router with nested routes, role-based route guards (user vs admin), lazy loading for code splitting and performance.
+    \item \textbf{State Management:} Vuex store modules for auth, user, subscription, and plans state, centralized API error handling.
+    \item \textbf{HTTP Client:} Axios configuration with request/response interceptors, automatic JWT token injection, retry logic for failed requests.
+    \item \textbf{UI/UX Implementation:} Vuetify Material Design components (data tables, forms, dialogs, cards), responsive layout for mobile and desktop, loading states and error feedback.
+\end{itemize}
+
+\subsubsection{User-Facing Features}
+\begin{itemize}
+    \item Authentication flow pages (Sign In, Sign Up, OAuth callbacks).
+    \item Subscription management interface with plan selection and upgrade/downgrade.
+    \item Usage statistics dashboard showing quota consumption.
+    \item Profile management and account settings.
+\end{itemize}
+
+\subsubsection{Admin-Facing Features}
+\begin{itemize}
+    \item Plans management interface with JSON editor and validation.
+    \item System monitoring and user subscription overview.
+    \item Configuration management tools.
 \end{itemize}

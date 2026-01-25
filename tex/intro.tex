@@ -29,70 +29,45 @@ The primary objective of this project is to design and implement a comprehensive
 \end{itemize}
 
 \section{Project Scope}
-The project scope encompasses three major components: Single Sign-On (SSO) Authentication, Payment \& Subscription Management, and Frontend Dashboard Development. Each component involves both frontend and backend implementation as detailed below.
+The project scope encompasses three major components: Single Sign-On (SSO) Authentication, Payment \& Subscription Management with Stripe Integration, and Frontend Dashboard Development.
 
 \subsection{Single Sign-On (SSO) Authentication}
-This component enables users to authenticate using their existing Google or Apple accounts, eliminating the need for separate credentials.
+This component enables users to authenticate using their existing social accounts or traditional credentials.
 
-\subsubsection{Backend Implementation (NestJS)}
+\textbf{Key Features:}
 \begin{itemize}
-    \item \textbf{Google SSO Module:} OAuth 2.0 integration with Google Sign-In using Passport.js strategies, handling authorization code flow with state management for CSRF protection.
-    \item \textbf{Apple SSO Module:} Integration with Apple Sign In, including token verification and privacy-preserving email relay support.
-    \item \textbf{JWT Token Management:} Generation and validation of access tokens (15-minute expiry) and refresh tokens with secure cookie storage (HttpOnly, Secure, SameSite attributes).
-    \item \textbf{Token Blacklisting:} Redis-based blacklist for immediate token revocation on user logout or security events.
-    \item \textbf{Traditional Auth:} Email/password authentication with bcrypt hashing as fallback option.
+    \item \textbf{Google SSO:} OAuth 2.0 integration with state management for CSRF protection.
+    \item \textbf{Apple SSO:} Apple Sign In integration with token verification and privacy-preserving email relay.
+    \item \textbf{JWT Token Management:} Generation and validation of access tokens (15-minute expiry) and refresh tokens with secure cookie storage (HttpOnly, Secure, SameSite).
+    \item \textbf{Token Blacklisting:} Redis-based blacklist for immediate token revocation on logout or security events.
+    \item \textbf{Traditional Authentication:} Email/password authentication with bcrypt hashing.
+    \item \textbf{Session Security:} CSRF protection, XSS prevention, and secure token lifecycle management.
 \end{itemize}
 
-\subsubsection{Frontend Implementation (Vue.js)}
+\subsection{Payment Portal with Stripe Integration}
+This component handles monetization through Stripe, enabling tiered subscription plans with usage-based quotas.
+
+\textbf{Key Features:}
 \begin{itemize}
-    \item \textbf{Authentication Pages:} Sign In, Sign Up, and OAuth callback handling pages.
-    \item \textbf{SSO Integration:} "Sign in with Google" and "Sign in with Apple" buttons with proper OAuth flow initiation.
-    \item \textbf{Token Management:} Automatic token refresh using interceptors, handling token expiration gracefully.
-    \item \textbf{Navigation Guards:} Route protection based on authentication status, redirecting unauthenticated users to login.
+    \item \textbf{Stripe Checkout:} Hosted checkout session creation and payment processing.
+    \item \textbf{Webhook Handling:} Secure webhook signature verification and idempotent event processing for payment lifecycle events.
+    \item \textbf{Plan Management:} JSON-based plan configuration with versioning support and admin API.
+    \item \textbf{Redis Caching:} Fast plan retrieval and Stripe price data caching with automatic cache invalidation.
+    \item \textbf{Subscription Synchronization:} Real-time sync between Stripe and internal database for subscription status.
+    \item \textbf{Quota Management:} Usage tracking and access control middleware enforcing plan limits.
+    \item \textbf{Payment UI:} Plan comparison cards, checkout flow, and subscription management interface.
 \end{itemize}
 
-\subsection{Payment \& Subscription Management}
-This component handles monetization through Stripe integration, enabling tiered subscription plans with usage-based quotas.
+\subsection{Frontend Dashboard}
+This component provides a complete Single Page Application (SPA) using Vue.js 2 and Vuetify with Material Design.
 
-\subsubsection{Backend Implementation (NestJS)}
+\textbf{Key Features:}
 \begin{itemize}
-    \item \textbf{Stripe Integration Module:} Checkout session creation, webhook handling for payment events (\texttt{checkout.session.completed}, \texttt{customer.subscription.updated/deleted}), webhook signature verification.
-    \item \textbf{Plans Module:} JSON-based plan configuration stored in MongoDB with versioning support, Redis caching for fast retrieval, admin API for plan updates with cache invalidation.
-    \item \textbf{Subscription Module:} User subscription tracking synchronized with Stripe, usage quota management (batch and live speech processing durations), access control middleware enforcing plan limits.
-    \item \textbf{Webhook Processing:} Idempotent event handling, automatic subscription creation/updates from Stripe events, cancellation and resumption logic.
-\end{itemize}
-
-\subsubsection{Frontend Implementation (Vue.js)}
-\begin{itemize}
-    \item \textbf{Subscription Page:} Display available plans with pricing fetched from Stripe API, plan comparison cards showing features and quotas, checkout button triggering Stripe Checkout session.
-    \item \textbf{User Dashboard:} Current subscription status and active plan display, usage quota tracking with visual progress indicators, cancel/resume subscription functionality.
-    \item \textbf{Admin Plans Management:} JSON editor for creating and updating service plans with real-time validation, version history tracking, preview of plan changes before publishing.
-    \item \textbf{Payment Success/Cancel Pages:} Post-checkout handling and user feedback.
-\end{itemize}
-
-\subsection{Frontend Dashboard Development}
-This component provides the complete user interface built as a Single Page Application (SPA) using \textbf{Vue.js 2} and \textbf{Vuetify}.
-
-\subsubsection{Core Frontend Architecture}
-\begin{itemize}
-    \item \textbf{Component Structure:} Reusable components (PlanCard, SubscriptionStatus, UserProfile), page components (Home, Subscription, Dashboard, Admin), layout components (AppBar, NavigationDrawer, Footer).
-    \item \textbf{Routing System:} Vue Router with nested routes, role-based route guards (user vs admin), lazy loading for code splitting and performance.
-    \item \textbf{State Management:} Vuex store modules for auth, user, subscription, and plans state, centralized API error handling.
-    \item \textbf{HTTP Client:} Axios configuration with request/response interceptors, automatic JWT token injection, retry logic for failed requests.
-    \item \textbf{UI/UX Implementation:} Vuetify Material Design components (data tables, forms, dialogs, cards), responsive layout for mobile and desktop, loading states and error feedback.
-\end{itemize}
-
-\subsubsection{User-Facing Features}
-\begin{itemize}
-    \item Authentication flow pages (Sign In, Sign Up, OAuth callbacks).
-    \item Subscription management interface with plan selection and upgrade/downgrade.
-    \item Usage statistics dashboard showing quota consumption.
-    \item Profile management and account settings.
-\end{itemize}
-
-\subsubsection{Admin-Facing Features}
-\begin{itemize}
-    \item Plans management interface with JSON editor and validation.
-    \item System monitoring and user subscription overview.
-    \item Configuration management tools.
+    \item \textbf{Authentication UI:} Sign In, Sign Up pages with SSO integration and OAuth callback handling.
+    \item \textbf{Protected Routing:} Vue Router with role-based navigation guards and lazy loading for performance.
+    \item \textbf{State Management:} Vuex store for centralized state management (auth, user, subscription, plans).
+    \item \textbf{HTTP Interceptors:} Automatic JWT token injection, token refresh logic, and retry mechanisms.
+    \item \textbf{User Dashboard:} Subscription status display, usage quota tracking with progress indicators, profile management.
+    \item \textbf{Admin Interface:} Plans management with JSON editor, validation, and version history.
+    \item \textbf{Responsive Design:} Mobile and desktop layouts with Vuetify components and intuitive UX.
 \end{itemize}

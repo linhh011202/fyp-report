@@ -82,6 +82,7 @@
       \field{howpublished}{\url{https://developer.apple.com/sign-in-with-apple}}
       \field{title}{Sign in with Apple: Technical Overview}
       \field{year}{2019}
+      \true{nocite}
     \endentry
     \entry{banker2011mongodb}{book}{}
       \name{author}{1}{}{%
@@ -431,6 +432,7 @@
       \field{howpublished}{\url{https://github.com/about}}
       \field{title}{GitHub Annual Report 2023}
       \field{year}{2023}
+      \true{nocite}
     \endentry
     \entry{google2023security}{misc}{}
       \name{author}{1}{}{%
@@ -452,6 +454,7 @@
       \field{howpublished}{\url{https://safety.google/authentication}}
       \field{title}{Google Account Security Features}
       \field{year}{2023}
+      \true{nocite}
     \endentry
     \entry{google2023stats}{misc}{}
       \name{author}{1}{}{%
@@ -473,6 +476,7 @@
       \field{howpublished}{\url{https://about.google}}
       \field{title}{Google Services: Active User Statistics 2023}
       \field{year}{2023}
+      \true{nocite}
     \endentry
     \entry{google2014material}{misc}{}
       \name{author}{1}{}{%
@@ -582,6 +586,7 @@
       \field{labeltitlesource}{title}
       \field{title}{Stripe integration: A comprehensive guide for developers}
       \field{year}{2020}
+      \true{nocite}
     \endentry
     \entry{hardt2012oauth}{report}{}
       \name{author}{1}{}{%
@@ -607,6 +612,7 @@
       \field{title}{The OAuth 2.0 authorization framework}
       \field{type}{techreport}
       \field{year}{2012}
+      \true{nocite}
     \endentry
     \entry{herzberg2019payment}{article}{}
       \name{author}{2}{}{%
@@ -670,6 +676,7 @@
       \field{title}{User data privacy: Facebook, Cambridge Analytica, and privacy protection}
       \field{volume}{51}
       \field{year}{2018}
+      \true{nocite}
       \field{pages}{56\bibrangedash 59}
       \range{pages}{4}
     \endentry
@@ -781,6 +788,7 @@
       \field{booktitle}{Proceedings of the 25th Symposium on Operating Systems Principles}
       \field{title}{Building reliable distributed systems using message queues}
       \field{year}{2015}
+      \true{nocite}
       \field{pages}{239\bibrangedash 254}
       \range{pages}{16}
     \endentry
@@ -885,6 +893,7 @@
       \field{howpublished}{\url{https://docs.microsoft.com/azure/active-directory}}
       \field{title}{Microsoft Identity Platform Documentation}
       \field{year}{2023}
+      \true{nocite}
     \endentry
     \entry{mikowski2013single}{book}{}
       \name{author}{2}{}{%
@@ -914,6 +923,7 @@
       \field{labeltitlesource}{title}
       \field{title}{Single Page Web Applications: JavaScript end-to-end}
       \field{year}{2013}
+      \true{nocite}
     \endentry
     \entry{newman2015building}{book}{}
       \name{author}{1}{}{%
@@ -938,6 +948,7 @@
       \field{labeltitlesource}{title}
       \field{title}{Building microservices: designing fine-grained systems}
       \field{year}{2015}
+      \true{nocite}
     \endentry
     \entry{osmani2017comparison}{misc}{}
       \name{author}{1}{}{%
@@ -1059,6 +1070,7 @@
       \field{booktitle}{2011 IEEE Symposium on Security and Privacy}
       \field{title}{SoK: Systematization of knowledge on web single sign-on systems}
       \field{year}{2011}
+      \true{nocite}
       \field{pages}{232\bibrangedash 246}
       \range{pages}{15}
     \endentry
@@ -1093,6 +1105,7 @@
       \field{journaltitle}{Proceedings of the 17th international conference on World Wide Web}
       \field{title}{RESTful web services vs. "big" web services: making the right architectural decision}
       \field{year}{2008}
+      \true{nocite}
       \field{pages}{805\bibrangedash 814}
       \range{pages}{10}
     \endentry
@@ -1115,6 +1128,7 @@
       \field{howpublished}{\url{https://investor.paypal-corp.com}}
       \field{title}{PayPal Q4 2023 Earnings Report}
       \field{year}{2023}
+      \true{nocite}
     \endentry
     \entry{peffers2003electronic}{article}{}
       \name{author}{3}{}{%
@@ -1149,6 +1163,7 @@
       \field{title}{Electronic payment systems: an analysis and comparison of types}
       \field{volume}{50}
       \field{year}{2003}
+      \true{nocite}
       \field{pages}{296\bibrangedash 304}
       \range{pages}{9}
     \endentry
@@ -1212,6 +1227,7 @@
       \field{labeltitlesource}{title}
       \field{title}{Microservices patterns: with examples in Java}
       \field{year}{2018}
+      \true{nocite}
     \endentry
     \entry{rodriguez2016rest}{article}{}
       \name{author}{5}{}{%
@@ -1293,6 +1309,7 @@
       \field{title}{Proof Key for Code Exchange by OAuth Public Clients}
       \field{type}{techreport}
       \field{year}{2015}
+      \true{nocite}
     \endentry
     \entry{schuh2013subscription}{article}{}
       \name{author}{3}{}{%
@@ -1326,6 +1343,7 @@
       \field{title}{Subscription business models: Growth and profitability}
       \field{volume}{7}
       \field{year}{2013}
+      \true{nocite}
       \field{pages}{385\bibrangedash 392}
       \range{pages}{8}
     \endentry

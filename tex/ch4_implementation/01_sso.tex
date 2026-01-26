@@ -4,9 +4,9 @@
 This section provides a comprehensive examination of the authentication system implemented in the Gateway Dashboard. The system is organized into three distinct modules matching the backend architecture:
 
 \begin{itemize}
-    \item \textbf{Auth Module}: Core authentication with traditional email/password, token management, and shared services
     \item \textbf{Google SSO Module}: OAuth 2.0 flow with Passport.js strategy
     \item \textbf{Apple SSO Module}: POST callback with JWT token verification
+    \item \textbf{Auth Module}: Core authentication with traditional email/password, token management, and shared services
 \end{itemize}
 
 Figure~\ref{fig:sso_architecture} illustrates the overall architecture showing how all authentication modules integrate.
@@ -17,6 +17,375 @@ Figure~\ref{fig:sso_architecture} illustrates the overall architecture showing h
 \caption{Authentication System Architecture Overview}
 \label{fig:sso_architecture}
 \end{figure}
+
+%----------------------------------------------------------------------
+\subsubsection{Google SSO Module}%
+\label{sec:google_sso_module}
+The Google SSO Module (\texttt{google-sso/}) implements OAuth 2.0 authentication using Google's identity platform with Passport.js.
+
+\paragraph{Module Structure}
+
+Figure~\ref{fig:google_sso_module_structure} shows the Google SSO module organization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/google_sso_module_structure.png}
+\caption{Google SSO Module Structure}
+\label{fig:google_sso_module_structure}
+\end{figure}
+
+The module consists of:
+\begin{itemize}
+    \item \texttt{GoogleSSOController}: Handles \texttt{/auth/google/*} endpoints
+    \item \texttt{GoogleAuthGuard}: Custom Passport guard with state parameter encoding
+    \item \texttt{GoogleStrategy}: Passport strategy configured with OAuth credentials
+    \item \texttt{GoogleSSOModule}: NestJS module importing \texttt{PassportModule} and \texttt{AuthModule}
+\end{itemize}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:google_sso_endpoints} lists the Google SSO endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Google SSO API Endpoints}
+\label{tab:google_sso_endpoints}
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\hline
+GET & /auth/google/login & Initiate Google OAuth login (redirects to Google) \\
+\hline
+GET & /auth/google/callback & Handle OAuth callback from Google \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Login Endpoint}
+
+Initiates the Google OAuth flow by redirecting to Google's consent screen.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=bash, caption={Google Login Request}]
+GET /auth/google/login?redirect=https://app.example.com&appId=123&prompt=select_account
+\end{lstlisting}
+
+\noindent\textbf{Query Parameters:}
+\begin{itemize}
+    \item \texttt{redirect} (optional): Frontend URL to redirect after authentication
+    \item \texttt{appId} (optional): Application ID for multi-tenant scenarios
+    \item \texttt{appSecret} (optional): Application secret
+    \item \texttt{prompt} (optional): Google OAuth prompt parameter (\texttt{select\_account}, \texttt{consent}, \texttt{none})
+\end{itemize}
+
+\paragraph{Callback Endpoint}
+
+Handles the OAuth callback from Google after user authentication.
+
+\noindent\textbf{For New Users:} Redirects to \texttt{/complete-signup} with temporary token stored in \texttt{localStorage}:
+\begin{lstlisting}[language=html, caption={New User Redirect Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('temporaryToken', '<temp-jwt>');
+      window.location.href = 'https://app.example.com/complete-signup';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\noindent\textbf{For Existing Users:} Redirects to \texttt{/sign-in} with access token stored in \texttt{localStorage}:
+\begin{lstlisting}[language=html, caption={Existing User Redirect Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('accessToken', '<access-token>');
+      localStorage.setItem('jwt', '<access-token>');
+      localStorage.setItem('subscriptionEnd', '1735689600000');
+      localStorage.setItem('isVerified', 'true');
+      window.location.href = 'https://app.example.com/sign-in';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\paragraph{OAuth Flow}
+
+Figure~\ref{fig:google_sso_oauth_flow} shows the complete OAuth flow including state parameter handling.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/google_sso_oauth_flow.png}
+\caption{Google OAuth 2.0 Authentication Flow}
+\label{fig:google_sso_oauth_flow}
+\end{figure}
+
+\paragraph{Google Strategy Implementation}
+
+The strategy is configured with OAuth credentials and requests email and profile scopes:
+
+\begin{lstlisting}[language=TypeScript, caption={Google Strategy Configuration}]
+@Injectable()
+export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  constructor(
+    @Inject(authConfig.KEY)
+    private auth: ConfigType<typeof authConfig>,
+  ) {
+    super({
+      clientID: auth.googleClientId,
+      clientSecret: auth.googleClientSecret,
+      callbackURL: auth.googleCallbackURL,
+      scope: ['email', 'profile'],
+      passReqToCallback: true,
+    })
+  }
+
+  async validate(
+    req: any,
+    accessToken: string,
+    _refreshToken: string,
+    profile: any,
+    done: VerifyCallback,
+  ): Promise<any> {
+    const { name, emails, photos } = profile
+    const user = {
+      email: emails[0].value,
+      firstName: name.givenName,
+      lastName: name.familyName,
+      picture: photos[0].value,
+      accessToken,
+    }
+    done(null, user)
+  }
+}
+\end{lstlisting}
+
+\paragraph{State Parameter for Context Preservation}
+
+Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect to maintain user session context.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/google_sso_state_flow.png}
+\caption{State Parameter Encoding Flow}
+\label{fig:google_sso_state_flow}
+\end{figure}
+
+The \texttt{GoogleAuthGuard} encodes query parameters into a base64 state parameter:
+
+\begin{lstlisting}[language=TypeScript, caption={Google Auth Guard with State Encoding}]
+@Injectable()
+export class GoogleAuthGuard extends AuthGuard('google') {
+  getAuthenticateOptions(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest()
+    const { redirect, appId, appSecret, prompt } = request.query
+
+    // Encode query parameters into state to preserve them through OAuth flow
+    const state = JSON.stringify({
+      redirect: redirect || null,
+      appId: appId || null,
+      appSecret: appSecret || null,
+    })
+
+    return {
+      state: Buffer.from(state).toString('base64'),
+      prompt: prompt || 'select_account', // Force account selection
+      access_type: 'offline', // For refresh tokens
+    }
+  }
+}
+\end{lstlisting}
+
+%----------------------------------------------------------------------
+\subsubsection{Apple SSO Module}%
+\label{sec:apple_sso_module}
+The Apple SSO Module (\texttt{apple-sso/}) implements Sign in with Apple using POST callback and JWT token verification.
+
+\paragraph{Module Structure}
+
+Figure~\ref{fig:apple_sso_module_structure} shows the Apple SSO module organization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{images/apple_sso_module_structure.png}
+\caption{Apple SSO Module Structure}
+\label{fig:apple_sso_module_structure}
+\end{figure}
+
+The module consists of:
+\begin{itemize}
+    \item \texttt{AppleSSOController}: Handles \texttt{/auth/apple/*} endpoints
+    \item \texttt{AppleSSOModule}: NestJS module importing \texttt{AuthModule}
+    \item Uses \texttt{apple-signin-auth} library for token verification
+\end{itemize}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:apple_sso_endpoints} lists the Apple SSO endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Apple SSO API Endpoints}
+\label{tab:apple_sso_endpoints}
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\hline
+POST & /auth/apple/callback & Handle Apple Sign-In callback with identity token \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Callback Endpoint}
+
+Handles the POST callback from Apple Sign-In with the identity token.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Apple Callback Request}]
+POST /auth/apple/callback
+Content-Type: application/json
+
+{
+  "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "code": "authorization-code-from-apple"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (New User):} Returns HTML that stores temporary token and redirects to complete signup:
+\begin{lstlisting}[language=html, caption={Apple New User Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('temporaryToken', '<temp-jwt>');
+      window.location.href = 'https://app.example.com/complete-signup';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\noindent\textbf{Response (Existing User):} Returns HTML that stores access token and redirects to sign-in:
+\begin{lstlisting}[language=html, caption={Apple Existing User Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('accessToken', '<access-token>');
+      localStorage.setItem('jwt', '<access-token>');
+      localStorage.setItem('subscriptionEnd', '1735689600000');
+      localStorage.setItem('isVerified', 'true');
+      window.location.href = 'https://app.example.com/sign-in';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\noindent\textbf{Response (Error - JSON):}
+\begin{lstlisting}[language=TypeScript, caption={Apple Error Response}]
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Apple authentication failed: No id_token received"
+}
+\end{lstlisting}
+
+\paragraph{Authentication Flow}
+
+Figure~\ref{fig:auth_apple_flow} shows the Apple Sign-In flow which uses POST callback instead of redirect-based OAuth.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/auth_apple_flow.png}
+\caption{Apple Sign-In Authentication Flow}
+\label{fig:auth_apple_flow}
+\end{figure}
+
+\paragraph{Token Verification}
+
+Figure~\ref{fig:apple_sso_token_verification} shows the token verification process with fallback mechanism.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/apple_sso_token_verification.png}
+\caption{Apple Token Verification Flow}
+\label{fig:apple_sso_token_verification}
+\end{figure}
+
+Apple tokens are verified using the \texttt{apple-signin-auth} library with fallback to manual verification:
+
+\begin{lstlisting}[language=TypeScript, caption={Apple SSO Controller Implementation}]
+@ApiTags('Apple SSO')
+@Controller('auth/apple')
+export class AppleSSOController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('callback')
+  async appleAuthCallback(@Body() body: AppleAuthDto, @Res() res: Response) {
+    if (!body.code && !body.id_token) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        statusCode: HttpStatus.UNAUTHORIZED,
+        success: false,
+        message: 'Apple authentication failed: No id_token received',
+      })
+    }
+
+    let appleResponse
+    try {
+      // Primary verification using apple-signin-auth library
+      appleResponse = await appleSignin.verifyIdToken(body.id_token, {
+        audience: process.env.APPLE_CLIENT_ID,
+        ignoreExpiration: false,
+      })
+    } catch (verifyError) {
+      // Fallback to manual verification
+      appleResponse = await this.authService.verifyAppleToken(body.id_token)
+    }
+
+    const result = await this.authService.checkUserByEmail(appleResponse.email)
+    // Handle new/existing user and redirect accordingly
+  }
+}
+\end{lstlisting}
+
+\paragraph{Manual Token Verification}
+
+The fallback verification in \texttt{AuthService} validates Apple tokens manually:
+
+\begin{lstlisting}[language=TypeScript, caption={Apple Token Manual Verification}]
+async verifyAppleToken(token: string): Promise<any> {
+  // Get all possible Apple Client IDs
+  const appleClientIds = [
+    this.configService.get('auth.appleClientId'),
+    this.configService.get('auth.appleClientIdAndroid'),
+  ].filter(Boolean)
+
+  // Decode JWT token to get header and payload
+  const decoded = jwt.decode(token, { complete: true })
+  if (!decoded) {
+    throw new UnauthorizedException('Invalid Apple token format')
+  }
+
+  const payload = decoded.payload as any
+
+  // Verify issuer
+  if (payload.iss !== 'https://appleid.apple.com') {
+    throw new UnauthorizedException('Invalid Apple token issuer')
+  }
+
+  // Check expiration
+  const now = Math.floor(Date.now() / 1000)
+  if (payload.exp && payload.exp < now) {
+    throw new UnauthorizedException('Apple token has expired')
+  }
+
+  // Verify audience matches configured client IDs
+  for (const clientId of appleClientIds) {
+    if (payload.aud === clientId) {
+      return payload
+    }
+  }
+
+  throw new UnauthorizedException('Apple token audience mismatch')
+}
+\end{lstlisting}
 
 %----------------------------------------------------------------------
 \subsubsection{Auth Module}%
@@ -405,375 +774,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     }
     return user
   }
-}
-\end{lstlisting}
-
-%----------------------------------------------------------------------
-\subsubsection{Google SSO Module}%
-\label{sec:google_sso_module}
-The Google SSO Module (\texttt{google-sso/}) implements OAuth 2.0 authentication using Google's identity platform with Passport.js.
-
-\paragraph{Module Structure}
-
-Figure~\ref{fig:google_sso_module_structure} shows the Google SSO module organization.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.7\textwidth]{images/google_sso_module_structure.png}
-\caption{Google SSO Module Structure}
-\label{fig:google_sso_module_structure}
-\end{figure}
-
-The module consists of:
-\begin{itemize}
-    \item \texttt{GoogleSSOController}: Handles \texttt{/auth/google/*} endpoints
-    \item \texttt{GoogleAuthGuard}: Custom Passport guard with state parameter encoding
-    \item \texttt{GoogleStrategy}: Passport strategy configured with OAuth credentials
-    \item \texttt{GoogleSSOModule}: NestJS module importing \texttt{PassportModule} and \texttt{AuthModule}
-\end{itemize}
-
-\paragraph{API Endpoints}
-
-Table~\ref{tab:google_sso_endpoints} lists the Google SSO endpoints.
-
-\begin{table}[H]
-\centering
-\caption{Google SSO API Endpoints}
-\label{tab:google_sso_endpoints}
-\begin{tabular}{|l|l|p{6cm}|}
-\hline
-\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
-\hline
-GET & /auth/google/login & Initiate Google OAuth login (redirects to Google) \\
-\hline
-GET & /auth/google/callback & Handle OAuth callback from Google \\
-\hline
-\end{tabular}
-\end{table}
-
-\paragraph{Login Endpoint}
-
-Initiates the Google OAuth flow by redirecting to Google's consent screen.
-
-\noindent\textbf{Request:}
-\begin{lstlisting}[language=bash, caption={Google Login Request}]
-GET /auth/google/login?redirect=https://app.example.com&appId=123&prompt=select_account
-\end{lstlisting}
-
-\noindent\textbf{Query Parameters:}
-\begin{itemize}
-    \item \texttt{redirect} (optional): Frontend URL to redirect after authentication
-    \item \texttt{appId} (optional): Application ID for multi-tenant scenarios
-    \item \texttt{appSecret} (optional): Application secret
-    \item \texttt{prompt} (optional): Google OAuth prompt parameter (\texttt{select\_account}, \texttt{consent}, \texttt{none})
-\end{itemize}
-
-\paragraph{Callback Endpoint}
-
-Handles the OAuth callback from Google after user authentication.
-
-\noindent\textbf{For New Users:} Redirects to \texttt{/complete-signup} with temporary token stored in \texttt{localStorage}:
-\begin{lstlisting}[language=html, caption={New User Redirect Response}]
-<html>
-  <head>
-    <script>
-      localStorage.setItem('temporaryToken', '<temp-jwt>');
-      window.location.href = 'https://app.example.com/complete-signup';
-    </script>
-  </head>
-</html>
-\end{lstlisting}
-
-\noindent\textbf{For Existing Users:} Redirects to \texttt{/sign-in} with access token stored in \texttt{localStorage}:
-\begin{lstlisting}[language=html, caption={Existing User Redirect Response}]
-<html>
-  <head>
-    <script>
-      localStorage.setItem('accessToken', '<access-token>');
-      localStorage.setItem('jwt', '<access-token>');
-      localStorage.setItem('subscriptionEnd', '1735689600000');
-      localStorage.setItem('isVerified', 'true');
-      window.location.href = 'https://app.example.com/sign-in';
-    </script>
-  </head>
-</html>
-\end{lstlisting}
-
-\paragraph{OAuth Flow}
-
-Figure~\ref{fig:google_sso_oauth_flow} shows the complete OAuth flow including state parameter handling.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.95\textwidth]{images/google_sso_oauth_flow.png}
-\caption{Google OAuth 2.0 Authentication Flow}
-\label{fig:google_sso_oauth_flow}
-\end{figure}
-
-\paragraph{Google Strategy Implementation}
-
-The strategy is configured with OAuth credentials and requests email and profile scopes:
-
-\begin{lstlisting}[language=TypeScript, caption={Google Strategy Configuration}]
-@Injectable()
-export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
-  constructor(
-    @Inject(authConfig.KEY)
-    private auth: ConfigType<typeof authConfig>,
-  ) {
-    super({
-      clientID: auth.googleClientId,
-      clientSecret: auth.googleClientSecret,
-      callbackURL: auth.googleCallbackURL,
-      scope: ['email', 'profile'],
-      passReqToCallback: true,
-    })
-  }
-
-  async validate(
-    req: any,
-    accessToken: string,
-    _refreshToken: string,
-    profile: any,
-    done: VerifyCallback,
-  ): Promise<any> {
-    const { name, emails, photos } = profile
-    const user = {
-      email: emails[0].value,
-      firstName: name.givenName,
-      lastName: name.familyName,
-      picture: photos[0].value,
-      accessToken,
-    }
-    done(null, user)
-  }
-}
-\end{lstlisting}
-
-\paragraph{State Parameter for Context Preservation}
-
-Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect to maintain user session context.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{images/google_sso_state_flow.png}
-\caption{State Parameter Encoding Flow}
-\label{fig:google_sso_state_flow}
-\end{figure}
-
-The \texttt{GoogleAuthGuard} encodes query parameters into a base64 state parameter:
-
-\begin{lstlisting}[language=TypeScript, caption={Google Auth Guard with State Encoding}]
-@Injectable()
-export class GoogleAuthGuard extends AuthGuard('google') {
-  getAuthenticateOptions(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest()
-    const { redirect, appId, appSecret, prompt } = request.query
-
-    // Encode query parameters into state to preserve them through OAuth flow
-    const state = JSON.stringify({
-      redirect: redirect || null,
-      appId: appId || null,
-      appSecret: appSecret || null,
-    })
-
-    return {
-      state: Buffer.from(state).toString('base64'),
-      prompt: prompt || 'select_account', // Force account selection
-      access_type: 'offline', // For refresh tokens
-    }
-  }
-}
-\end{lstlisting}
-
-%----------------------------------------------------------------------
-\subsubsection{Apple SSO Module}%
-\label{sec:apple_sso_module}
-The Apple SSO Module (\texttt{apple-sso/}) implements Sign in with Apple using POST callback and JWT token verification.
-
-\paragraph{Module Structure}
-
-Figure~\ref{fig:apple_sso_module_structure} shows the Apple SSO module organization.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.65\textwidth]{images/apple_sso_module_structure.png}
-\caption{Apple SSO Module Structure}
-\label{fig:apple_sso_module_structure}
-\end{figure}
-
-The module consists of:
-\begin{itemize}
-    \item \texttt{AppleSSOController}: Handles \texttt{/auth/apple/*} endpoints
-    \item \texttt{AppleSSOModule}: NestJS module importing \texttt{AuthModule}
-    \item Uses \texttt{apple-signin-auth} library for token verification
-\end{itemize}
-
-\paragraph{API Endpoints}
-
-Table~\ref{tab:apple_sso_endpoints} lists the Apple SSO endpoints.
-
-\begin{table}[H]
-\centering
-\caption{Apple SSO API Endpoints}
-\label{tab:apple_sso_endpoints}
-\begin{tabular}{|l|l|p{6cm}|}
-\hline
-\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
-\hline
-POST & /auth/apple/callback & Handle Apple Sign-In callback with identity token \\
-\hline
-\end{tabular}
-\end{table}
-
-\paragraph{Callback Endpoint}
-
-Handles the POST callback from Apple Sign-In with the identity token.
-
-\noindent\textbf{Request:}
-\begin{lstlisting}[language=TypeScript, caption={Apple Callback Request}]
-POST /auth/apple/callback
-Content-Type: application/json
-
-{
-  "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "code": "authorization-code-from-apple"
-}
-\end{lstlisting}
-
-\noindent\textbf{Response (New User):} Returns HTML that stores temporary token and redirects to complete signup:
-\begin{lstlisting}[language=html, caption={Apple New User Response}]
-<html>
-  <head>
-    <script>
-      localStorage.setItem('temporaryToken', '<temp-jwt>');
-      window.location.href = 'https://app.example.com/complete-signup';
-    </script>
-  </head>
-</html>
-\end{lstlisting}
-
-\noindent\textbf{Response (Existing User):} Returns HTML that stores access token and redirects to sign-in:
-\begin{lstlisting}[language=html, caption={Apple Existing User Response}]
-<html>
-  <head>
-    <script>
-      localStorage.setItem('accessToken', '<access-token>');
-      localStorage.setItem('jwt', '<access-token>');
-      localStorage.setItem('subscriptionEnd', '1735689600000');
-      localStorage.setItem('isVerified', 'true');
-      window.location.href = 'https://app.example.com/sign-in';
-    </script>
-  </head>
-</html>
-\end{lstlisting}
-
-\noindent\textbf{Response (Error - JSON):}
-\begin{lstlisting}[language=TypeScript, caption={Apple Error Response}]
-{
-  "statusCode": 401,
-  "success": false,
-  "message": "Apple authentication failed: No id_token received"
-}
-\end{lstlisting}
-
-\paragraph{Authentication Flow}
-
-Figure~\ref{fig:auth_apple_flow} shows the Apple Sign-In flow which uses POST callback instead of redirect-based OAuth.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.9\textwidth]{images/auth_apple_flow.png}
-\caption{Apple Sign-In Authentication Flow}
-\label{fig:auth_apple_flow}
-\end{figure}
-
-\paragraph{Token Verification}
-
-Figure~\ref{fig:apple_sso_token_verification} shows the token verification process with fallback mechanism.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.9\textwidth]{images/apple_sso_token_verification.png}
-\caption{Apple Token Verification Flow}
-\label{fig:apple_sso_token_verification}
-\end{figure}
-
-Apple tokens are verified using the \texttt{apple-signin-auth} library with fallback to manual verification:
-
-\begin{lstlisting}[language=TypeScript, caption={Apple SSO Controller Implementation}]
-@ApiTags('Apple SSO')
-@Controller('auth/apple')
-export class AppleSSOController {
-  constructor(private readonly authService: AuthService) {}
-
-  @Post('callback')
-  async appleAuthCallback(@Body() body: AppleAuthDto, @Res() res: Response) {
-    if (!body.code && !body.id_token) {
-      return res.status(HttpStatus.UNAUTHORIZED).json({
-        statusCode: HttpStatus.UNAUTHORIZED,
-        success: false,
-        message: 'Apple authentication failed: No id_token received',
-      })
-    }
-
-    let appleResponse
-    try {
-      // Primary verification using apple-signin-auth library
-      appleResponse = await appleSignin.verifyIdToken(body.id_token, {
-        audience: process.env.APPLE_CLIENT_ID,
-        ignoreExpiration: false,
-      })
-    } catch (verifyError) {
-      // Fallback to manual verification
-      appleResponse = await this.authService.verifyAppleToken(body.id_token)
-    }
-
-    const result = await this.authService.checkUserByEmail(appleResponse.email)
-    // Handle new/existing user and redirect accordingly
-  }
-}
-\end{lstlisting}
-
-\paragraph{Manual Token Verification}
-
-The fallback verification in \texttt{AuthService} validates Apple tokens manually:
-
-\begin{lstlisting}[language=TypeScript, caption={Apple Token Manual Verification}]
-async verifyAppleToken(token: string): Promise<any> {
-  // Get all possible Apple Client IDs
-  const appleClientIds = [
-    this.configService.get('auth.appleClientId'),
-    this.configService.get('auth.appleClientIdAndroid'),
-  ].filter(Boolean)
-
-  // Decode JWT token to get header and payload
-  const decoded = jwt.decode(token, { complete: true })
-  if (!decoded) {
-    throw new UnauthorizedException('Invalid Apple token format')
-  }
-
-  const payload = decoded.payload as any
-
-  // Verify issuer
-  if (payload.iss !== 'https://appleid.apple.com') {
-    throw new UnauthorizedException('Invalid Apple token issuer')
-  }
-
-  // Check expiration
-  const now = Math.floor(Date.now() / 1000)
-  if (payload.exp && payload.exp < now) {
-    throw new UnauthorizedException('Apple token has expired')
-  }
-
-  // Verify audience matches configured client IDs
-  for (const clientId of appleClientIds) {
-    if (payload.aud === clientId) {
-      return payload
-    }
-  }
-
-  throw new UnauthorizedException('Apple token audience mismatch')
 }
 \end{lstlisting}
 

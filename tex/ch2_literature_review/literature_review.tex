@@ -88,8 +88,7 @@ Table~\ref{tab:redis_usage} summarizes Redis applications:
 \hline
 \textbf{Use Case} & \textbf{Purpose} & \textbf{Performance Gain} & \textbf{TTL} \\ \hline
 Plan Caching & Reduce DB load & 95\%+ load reduction & 1 hour \\ \hline
-Stripe Price Caching & Minimize API calls & Sub-ms retrieval & 1 hour \\ \hline
-Token Blacklist & Immediate revocation & <1ms lookup & Token expiry \\ \hline
+Stripe Price Caching & Minimize API calls & Sub-ms retrieval & 24 hours \\ \hline
 \end{tabular}
 \end{table}
 
@@ -98,7 +97,6 @@ Token Blacklist & Immediate revocation & <1ms lookup & Token expiry \\ \hline
 \begin{enumerate}
     \item \textbf{Performance:} Sub-millisecond access times \cite{carlson2013redis}, in-memory storage
     \item \textbf{Scalability:} Handles millions of requests/second, horizontally scalable
-    \item \textbf{Security:} Enables JWT token blacklisting for immediate logout/revocation
     \item \textbf{Database Protection:} Shields MongoDB from read-heavy workloads (99\% read, 1\% write)
     \item \textbf{Cache Strategy:} Cache-aside pattern \cite{fowler2003patterns} with automatic invalidation
     \item \textbf{Persistence:} RDB snapshots prevent data loss during restarts
@@ -123,8 +121,8 @@ Table~\ref{tab:token_management} details the token strategy:
 \textbf{Feature} & \textbf{Implementation} & \textbf{Purpose} \\ \hline
 Access Token & JWT, 15-min expiry & Minimize compromise window \cite{lodderstedt2013oauth} \\ \hline
 Refresh Token & 7-day expiry, rotation & Seamless re-auth \cite{siriwardena2020advanced} \\ \hline
-Blacklisting & Redis-based & Immediate revocation \\ \hline
-Cookie Storage & HttpOnly, Secure, SameSite & XSS/CSRF protection \cite{barth2008securing} \\ \hline
+Blacklisting & MongoDB (TTL Index) & Revocation (Logouts/New Login) \\ \hline
+Storage & LocalStorage & XSS protection via sanitization \\ \hline
 Stateless Auth & JWT self-contained & Horizontal scalability \\ \hline
 \end{tabular}
 \end{table}
@@ -152,8 +150,8 @@ Table~\ref{tab:technology_summary} summarizes key technology decisions:
 \textbf{Component} & \textbf{Choice} & \textbf{Key Reason} \\ \hline
 SSO Providers & Google + Apple & 95\%+ user coverage, Microsoft by other dev \\ \hline
 Payment & Stripe & Better API, subscriptions, webhooks vs PayPal \\ \hline
-Caching & Redis & Performance (sub-ms) + security (blacklist) \\ \hline
-Token Strategy & JWT + Redis blacklist & Stateless scalability + immediate revocation \\ \hline
+Caching & Redis & High-performance caching for plans and prices \\ \hline
+Token Strategy & JWT + MongoDB TTL & Stateless scalability + effective revocation \\ \hline
 \end{tabular}
 \end{table}
 

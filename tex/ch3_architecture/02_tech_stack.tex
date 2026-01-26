@@ -11,11 +11,11 @@ The Gateway Dashboard leverages modern, industry-standard technologies to ensure
 \hline
 \textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
 \hline
-Vue.js & 2.x & Progressive JavaScript framework for building user interfaces \\
+Vue.js & 3.x & Progressive JavaScript framework for building user interfaces \\
 \hline
-Vuetify & 2.x & Material Design component framework for Vue.js \\
+Vuetify & 3.x & Material Design component framework for Vue.js \\
 \hline
-Vue Router & 3.x & Official router for single-page application navigation \\
+Vue Router & 4.x & Official router for single-page application navigation \\
 \hline
 Axios & Latest & Promise-based HTTP client for API communication \\
 \hline
@@ -24,7 +24,7 @@ Axios & Latest & Promise-based HTTP client for API communication \\
 \label{tab:frontend_tech}
 \end{table}
 
-\textbf{Vue.js 2} was selected for its gentle learning curve, excellent documentation, and reactive data binding capabilities. The framework's component-based architecture facilitates code reuse and maintainability. \textbf{Vuetify} provides a comprehensive set of Material Design components, enabling rapid UI development with a professional appearance.
+\textbf{Vue.js 3} was selected for its Composition API, improved performance, and excellent TypeScript support. \textbf{Vuetify 3} provides a comprehensive set of Material Design components, enabling rapid UI development with a professional appearance.
 
 \subsection{Backend Technologies}
 
@@ -34,11 +34,11 @@ Axios & Latest & Promise-based HTTP client for API communication \\
 \hline
 \textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
 \hline
-NestJS & 9.x & Progressive Node.js framework for server-side applications \\
+NestJS & 10.x & Progressive Node.js framework for server-side applications \\
 \hline
-TypeScript & 4.x & Typed superset of JavaScript for enhanced code quality \\
+TypeScript & 5.x & Typed superset of JavaScript for enhanced code quality \\
 \hline
-Passport & 0.6.x & Authentication middleware for Node.js \\
+Passport & 0.7.x & Authentication middleware for Node.js \\
 \hline
 JWT & Latest & JSON Web Token for stateless authentication \\
 \hline
@@ -57,16 +57,16 @@ JWT & Latest & JSON Web Token for stateless authentication \\
 \hline
 \textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
 \hline
-MongoDB & 5.x & NoSQL document database for flexible schema design \\
+MongoDB & 6.x & NoSQL document database for flexible schema design \\
 \hline
-Redis & 6.x & In-memory data store for caching and session management \\
+Redis & 7.x & In-memory data store for caching \\
 \hline
 \end{tabular}
 \caption{Storage Technologies}
 \label{tab:storage_tech}
 \end{table}
 
-\textbf{MongoDB} was chosen for its schema flexibility, horizontal scalability, and native JSON support. \textbf{Redis} serves dual purposes: caching frequently accessed data (plans, prices) and managing token blacklists for security.
+\textbf{MongoDB} was chosen for its schema flexibility, horizontal scalability, and native JSON support. \textbf{Redis} is primarily used for caching frequently accessed data (plans, prices) to reduce database load and API latency.
 
 \subsubsection{Caching Architecture}
 

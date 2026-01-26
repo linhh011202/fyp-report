@@ -78,9 +78,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 }
 \end{lstlisting}
 
-\noindent\textbf{State Parameter for CSRF Protection}\\
+\noindent\textbf{State Parameter for Context Preservation}\\
 
-Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect.
+Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect to maintain user session context (e.g., redirect URL).
 
 \begin{figure}[H]
 \centering

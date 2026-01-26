@@ -1,9 +1,11 @@
 \chapter{Literature Review}
 \label{chap:literature_review}
 
-This chapter examines the key technology decisions for the Gateway Dashboard, focusing on SSO provider selection, payment platform comparison, Redis caching importance, and token management strategies.
+This chapter examines the key technology decisions for the Gateway Dashboard, focusing on SSO provider selection and payment platform comparison.
 
 \section{SSO Provider Selection}
+
+\textbf{Single Sign-On (SSO)} is an authentication method that allows users to log in to multiple applications using one set of credentials from a trusted identity provider (such as Google or Apple), eliminating the need to create separate accounts for each service.
 
 The Gateway Dashboard implements Google and Apple SSO as primary authentication methods.
 
@@ -15,14 +17,14 @@ Table~\ref{tab:sso_comparison} compares major SSO providers:
 \centering
 \caption{SSO Provider Comparison}
 \label{tab:sso_comparison}
-\begin{tabular}{|l|l|l|l|}
+\begin{tabular}{|l|l|l|}
 \hline
-\textbf{Provider} & \textbf{Market Share} & \textbf{Key Advantage} & \textbf{Status} \\ \hline
-Google & 71\% (Android) & 2B+ users, mature API & \textbf{Implemented} \\ \hline
-Apple & 28\% (iOS) & Privacy-focused, email relay & \textbf{Implemented} \\ \hline
-Microsoft & Enterprise strong & Azure AD integration & Other dev \\ \hline
-Facebook & 2.9B users & Large user base & Excluded (privacy) \\ \hline
-GitHub & Developer focus & Dev community & Not needed \\ \hline
+\textbf{Provider} & \textbf{Market Share} & \textbf{Key Advantage} \\ \hline
+Google & 71\% (Android) & 2B+ users, mature API \\ \hline
+Apple & 28\% (iOS) & Privacy-focused, email relay \\ \hline
+Microsoft & Enterprise strong & Azure AD integration \\ \hline
+Facebook & 2.9B users & Large user base \\ \hline
+GitHub & Developer focus & Dev community \\ \hline
 \end{tabular}
 \end{table}
 
@@ -38,6 +40,10 @@ GitHub & Developer focus & Dev community & Not needed \\ \hline
 \end{enumerate}
 
 \section{Payment Platform Selection: Stripe vs PayPal}
+
+A \textbf{payment system} is a software infrastructure that enables businesses to accept and process financial transactions, including one-time payments and recurring subscriptions.
+
+\textbf{Stripe} is a technology company that provides payment processing APIs for internet businesses. It offers a developer-friendly platform for handling online payments, subscription billing, and financial operations through a unified API.
 
 \subsection{Comparison Overview}
 
@@ -72,71 +78,6 @@ Table~\ref{tab:payment_comparison} compares Stripe and PayPal:
     \item \textbf{Target Audience:} Developers value functionality over PayPal's consumer brand
 \end{itemize}
 
-\section{Redis Caching: Critical Importance}
-
-Redis is essential for both \textbf{performance} and \textbf{security} in the Gateway Dashboard.
-
-\subsection{Redis Use Cases}
-
-Table~\ref{tab:redis_usage} summarizes Redis applications:
-
-\begin{table}[H]
-\centering
-\caption{Redis Usage in Gateway Dashboard}
-\label{tab:redis_usage}
-\begin{tabular}{|l|l|l|l|}
-\hline
-\textbf{Use Case} & \textbf{Purpose} & \textbf{Performance Gain} & \textbf{TTL} \\ \hline
-Plan Caching & Reduce DB load & 95\%+ load reduction & 1 hour \\ \hline
-Stripe Price Caching & Minimize API calls & Sub-ms retrieval & 24 hours \\ \hline
-\end{tabular}
-\end{table}
-
-\subsection{Why Redis is Critical}
-
-\begin{enumerate}
-    \item \textbf{Performance:} Sub-millisecond access times \cite{carlson2013redis}, in-memory storage
-    \item \textbf{Scalability:} Handles millions of requests/second, horizontally scalable
-    \item \textbf{Database Protection:} Shields MongoDB from read-heavy workloads (99\% read, 1\% write)
-    \item \textbf{Cache Strategy:} Cache-aside pattern \cite{fowler2003patterns} with automatic invalidation
-    \item \textbf{Persistence:} RDB snapshots prevent data loss during restarts
-\end{enumerate}
-
-\textbf{Implementation:} Cache warming on startup, automatic invalidation on plan updates, TTL-based expiration.
-
-\section{Token Management Strategy}
-
-Token management balances \textbf{security}, \textbf{scalability}, and \textbf{user experience}.
-
-\subsection{Token Architecture}
-
-Table~\ref{tab:token_management} details the token strategy:
-
-\begin{table}[H]
-\centering
-\caption{Token Management Strategy}
-\label{tab:token_management}
-\begin{tabular}{|l|l|l|}
-\hline
-\textbf{Feature} & \textbf{Implementation} & \textbf{Purpose} \\ \hline
-Access Token & JWT, 15-min expiry & Minimize compromise window \cite{lodderstedt2013oauth} \\ \hline
-Refresh Token & 7-day expiry, rotation & Seamless re-auth \cite{siriwardena2020advanced} \\ \hline
-Blacklisting & MongoDB (TTL Index) & Revocation (Logouts/New Login) \\ \hline
-Storage & LocalStorage & XSS protection via sanitization \\ \hline
-Stateless Auth & JWT self-contained & Horizontal scalability \\ \hline
-\end{tabular}
-\end{table}
-
-\subsection{Why This Approach}
-
-\begin{itemize}
-    \item \textbf{Stateless Scalability:} JWTs don't require DB lookup on every request \cite{jones2015json}
-    \item \textbf{Security Layers:} Short-lived tokens + blacklist + secure cookies
-    \item \textbf{User Experience:} Automatic refresh = no frequent logins
-    \item \textbf{Immediate Revocation:} Redis blacklist solves JWT's "can't revoke" problem
-    \item \textbf{Performance:} Sub-millisecond blacklist checks, no DB bottleneck
-\end{itemize}
-
 \section{Summary}
 
 Table~\ref{tab:technology_summary} summarizes key technology decisions:
@@ -150,8 +91,6 @@ Table~\ref{tab:technology_summary} summarizes key technology decisions:
 \textbf{Component} & \textbf{Choice} & \textbf{Key Reason} \\ \hline
 SSO Providers & Google + Apple & 95\%+ user coverage, Microsoft by other dev \\ \hline
 Payment & Stripe & Better API, subscriptions, webhooks vs PayPal \\ \hline
-Caching & Redis & High-performance caching for plans and prices \\ \hline
-Token Strategy & JWT + MongoDB TTL & Stateless scalability + effective revocation \\ \hline
 \end{tabular}
 \end{table}
 

@@ -36,12 +36,12 @@ This component enables users to authenticate using their existing social account
 
 \textbf{Key Features:}
 \begin{itemize}
-    \item \textbf{Google SSO:} OAuth 2.0 integration with state management for CSRF protection.
+    \item \textbf{Google SSO:} OAuth 2.0 integration with state management.
     \item \textbf{Apple SSO:} Apple Sign In integration with token verification and privacy-preserving email relay.
     \item \textbf{JWT Token Management:} Generation and validation of access tokens (15-minute expiry) and refresh tokens with secure cookie storage (HttpOnly, Secure, SameSite).
     \item \textbf{Token Blacklisting:} Redis-based blacklist for immediate token revocation on logout or security events.
     \item \textbf{Traditional Authentication:} Email/password authentication with bcrypt hashing.
-    \item \textbf{Session Security:} CSRF protection, XSS prevention, and secure token lifecycle management.
+    \item \textbf{Session Security:} XSS prevention and secure token lifecycle management.
 \end{itemize}
 
 \subsection{Payment Portal with Stripe Integration}
@@ -71,3 +71,108 @@ This component provides a complete Single Page Application (SPA) using Vue.js 2 
     \item \textbf{Admin Interface:} Plans management with JSON editor, validation, and version history.
     \item \textbf{Responsive Design:} Mobile and desktop layouts with Vuetify components and intuitive UX.
 \end{itemize}
+
+\section{Proposed System Overview}
+This section presents the three main components of the proposed system, comparing the workflow before and after implementation.
+
+\subsection{Single Sign-On (SSO) Authentication}
+
+\textbf{Before:} Users needed to create separate credentials, leading to credential fatigue and security risks from weak or reused passwords.
+
+\textbf{After:} The implemented flow works as follows:
+\begin{enumerate}
+    \item User clicks on Google or Apple SSO button on the sign-in page.
+    \item System redirects to the OAuth provider for authentication.
+    \item Upon successful authentication, the provider returns user identity.
+    \item System creates or links the user account and issues JWT tokens.
+    \item User is redirected to the dashboard with active session.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/sign-in-UI.jpg}
+    \caption{Sign-In Interface with SSO Options}
+    \label{fig:sso-signin}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/registration-UI.jpg}
+    \caption{Registration Interface with SSO Integration}
+    \label{fig:sso-registration}
+\end{figure}
+
+\subsection{Stripe Payment Integration}
+
+\textbf{Before:} No automated billing, requiring manual invoice generation and payment verification before granting access.
+
+\textbf{After:} The implemented payment flow works as follows:
+\begin{enumerate}
+    \item Admin configures subscription plans in Stripe product catalog.
+    \item User selects a plan and clicks subscribe.
+    \item System creates a Stripe checkout session and redirects user.
+    \item User completes payment on Stripe's hosted checkout page.
+    \item Stripe sends webhook notification upon successful payment.
+    \item System updates subscription status and grants access to features.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/Stripe-product-catalog.jpg}
+    \caption{Stripe Product Catalog Configuration}
+    \label{fig:stripe-catalog}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/basic-plan-Stripe-check-out-UI-for-users.jpg}
+    \caption{Stripe Checkout Interface for Basic Plan}
+    \label{fig:stripe-checkout}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/subscription-UI-for-users.jpg}
+    \caption{Subscription Management Interface for Users}
+    \label{fig:subscription-ui}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/succesful-subscription.jpg}
+    \caption{Successful Subscription Confirmation}
+    \label{fig:successful-subscription}
+\end{figure}
+
+\subsection{Frontend Dashboard}
+
+\textbf{Before:} No visual interface, requiring direct API calls and making it difficult to monitor subscriptions or manage users.
+
+\textbf{After:} The implemented dashboard provides a complete user flow:
+\begin{enumerate}
+    \item User authenticates via SSO or traditional login.
+    \item Dashboard displays subscription status and usage quotas.
+    \item User can manage profile, view transactions, and upgrade plans.
+    \item Admin can manage users, configure plans, and monitor subscriptions.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/users-UI.jpg}
+    \caption{User Management Dashboard}
+    \label{fig:users-dashboard}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/subscription-UI-for-admin.jpg}
+    \caption{Admin Subscription Management Interface}
+    \label{fig:admin-subscription}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/Deployment/upgrade-or-change-plan.jpg}
+    \caption{Plan Upgrade Interface}
+    \label{fig:upgrade-plan}
+\end{figure}

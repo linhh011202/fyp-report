@@ -1,0 +1,73 @@
+stateDiagram-v2
+    [*] --> NoSubscription: User registers
+
+    NoSubscription --> CheckoutInProgress: User selects plan
+    CheckoutInProgress --> NoSubscription: Payment failed/cancelled
+
+    CheckoutInProgress --> Active: checkout.session.completed
+    note right of Active
+        DB Updates:
+        - Create subscription record
+        - Set startDate = now
+        - Set endDate = period_end
+        - Set quota from plan
+        - Reset usage to 0
+    end note
+
+    Active --> Active: invoice.paid (renewal)
+    note right of Active
+        Renewal Updates:
+        - Extend endDate by billing period
+        - Reset usage to 0
+        - Update status = active
+    end note
+
+    Active --> ScheduledChange: User schedules plan change
+    note right of ScheduledChange
+        DB Updates:
+        - Set scheduledPriceId
+        - Set scheduledPlanId
+        - Set stripeScheduleId
+    end note
+
+    ScheduledChange --> Active: subscription_schedule.released
+    note left of Active
+        New Plan Applied:
+        - Update planId, priceId
+        - Update quota from new plan
+        - Clear scheduled fields
+    end note
+
+    ScheduledChange --> Active: User cancels schedule
+    note left of Active
+        Cancel Schedule:
+        - Clear scheduledPriceId
+        - Clear scheduledPlanId
+        - Clear stripeScheduleId
+    end note
+
+    Active --> PendingCancellation: User cancels subscription
+    note right of PendingCancellation
+        Cancellation Updates:
+        - Set cancel_at_period_end = true
+        - endDate remains unchanged
+        - User retains access until endDate
+    end note
+
+    PendingCancellation --> Active: User resumes subscription
+    note left of Active
+        Resume Updates:
+        - Set cancel_at_period_end = false
+        - Subscription continues normally
+    end note
+
+    PendingCancellation --> Expired: endDate reached
+    note right of Expired
+        Expiration Updates:
+        - Set status = canceled
+        - User loses access
+        - Quotas become 0
+    end note
+
+    Expired --> CheckoutInProgress: User resubscribes
+    Expired --> [*]: Account remains inactive

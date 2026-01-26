@@ -3,7 +3,7 @@
 
 This subsection documents the payment processing and subscription management system built with Stripe integration, Redis caching, and MongoDB persistence. The system is organized into three distinct backend modules that handle different aspects of the payment workflow.
 
-\paragraph{Architecture Overview}
+\subsubsection{Architecture Overview}
 
 Figure~\ref{fig:payment_architecture} illustrates the payment system architecture showing the interaction between modules.
 
@@ -17,423 +17,168 @@ Figure~\ref{fig:payment_architecture} illustrates the payment system architectur
 The payment system consists of three main modules:
 
 \begin{itemize}
-    \item \textbf{Plan Module}: Manages subscription plans with versioning and Redis caching
-    \item \textbf{Subscription Module}: Tracks user subscriptions, quotas, and usage
     \item \textbf{Stripe Module}: Handles Stripe API interactions, checkout sessions, webhooks, and billing operations
+    \item \textbf{Subscription Module}: Tracks user subscriptions, quotas, and usage
+    \item \textbf{Plan Module}: Manages subscription plans with versioning and Redis caching
 \end{itemize}
+
+\paragraph{Subscription Lifecycle Events}
+
+Figure~\ref{fig:subscription_lifecycle_events} illustrates the complete subscription lifecycle from initial purchase through renewal, cancellation, and expiration.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/subscription_lifecycle_events.png}
+\caption{Subscription Lifecycle State Diagram}
+\label{fig:subscription_lifecycle_events}
+\end{figure}
+
+The subscription lifecycle consists of the following key events and their corresponding backend actions:
+
+\begin{enumerate}
+    \item \textbf{New Subscription (checkout.session.completed)}:
+    \begin{itemize}
+        \item Creates new subscription record in MongoDB
+        \item Sets \texttt{startDate} to current timestamp
+        \item Sets \texttt{endDate} to Stripe's \texttt{current\_period\_end}
+        \item Assigns quota based on selected plan (\texttt{batchDuration}, \texttt{liveDuration})
+        \item Initializes usage counters to 0
+        \item Sets status to \texttt{active}
+    \end{itemize}
+    
+    \item \textbf{Subscription Renewal (invoice.paid)}:
+    \begin{itemize}
+        \item Extends \texttt{endDate} by the billing period (e.g., +30 days for monthly)
+        \item Resets \texttt{usage.batchDuration} and \texttt{usage.liveDuration} to 0
+        \item Maintains existing quota allocation
+        \item Updates status to \texttt{active} if previously past\_due
+    \end{itemize}
+    
+    \item \textbf{Subscription Cancellation}:
+    \begin{itemize}
+        \item Sets \texttt{cancel\_at\_period\_end = true} in Stripe
+        \item \texttt{endDate} remains unchanged (user retains access until period end)
+        \item No immediate database status change
+        \item User can resume subscription before \texttt{endDate}
+    \end{itemize}
+    
+    \item \textbf{Subscription Expiration}:
+    \begin{itemize}
+        \item Triggered when current time exceeds \texttt{endDate}
+        \item Sets status to \texttt{canceled}
+        \item User loses access to premium features
+        \item Quota checks return failure
+    \end{itemize}
+    
+    \item \textbf{Plan Change Scheduling}:
+    \begin{itemize}
+        \item Stores \texttt{scheduledPriceId} and \texttt{scheduledPlanId}
+        \item New plan takes effect at next billing cycle
+        \item Quota updates when \texttt{subscription\_schedule.released} webhook fires
+    \end{itemize}
+\end{enumerate}
+
+\paragraph{Post-Payment Database Updates}
+
+When Stripe fires the \texttt{checkout.session.completed} webhook, the backend performs the following database operations:
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Creation After Payment}]
+async handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const subscription = await this.stripe.subscriptions.retrieve(
+    session.subscription as string
+  );
+  
+  // Get plan details from line items
+  const planDetails = await this.getPlanFromPriceId(
+    subscription.items.data[0].price.id
+  );
+
+  // Create or update subscription in MongoDB
+  await this.subscriptionModel.findOneAndUpdate(
+    { user: session.metadata.userId },
+    {
+      user: session.metadata.userId,
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId: session.customer as string,
+      planId: planDetails.id,
+      planName: planDetails.name,
+      priceId: subscription.items.data[0].price.id,
+      status: 'active',
+      startDate: new Date(subscription.current_period_start * 1000),
+      endDate: new Date(subscription.current_period_end * 1000),
+      quota: {
+        batchDuration: planDetails.batchDuration,
+        liveDuration: planDetails.liveDuration,
+      },
+      usage: {
+        batchDuration: 0,  // Reset usage on new subscription
+        liveDuration: 0,
+      },
+    },
+    { upsert: true, new: true }
+  );
+}
+\end{lstlisting}
+
+\paragraph{Renewal and Usage Reset}
+
+When a subscription renews, the \texttt{invoice.paid} webhook triggers quota reset:
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Renewal Handler}]
+async handleInvoicePaid(invoice: Stripe.Invoice) {
+  if (invoice.billing_reason !== 'subscription_cycle') return;
+
+  const subscription = await this.stripe.subscriptions.retrieve(
+    invoice.subscription as string
+  );
+
+  // Extend endDate and reset usage
+  await this.subscriptionModel.findOneAndUpdate(
+    { stripeSubscriptionId: subscription.id },
+    {
+      endDate: new Date(subscription.current_period_end * 1000),
+      status: 'active',
+      'usage.batchDuration': 0,  // Reset usage for new billing period
+      'usage.liveDuration': 0,
+    }
+  );
+}
+\end{lstlisting}
+
+\paragraph{Cancellation Expiry Handling}
+
+When a user cancels, the subscription remains active until the billing period ends:
+
+\begin{lstlisting}[language=TypeScript, caption={Cancellation with Period-End Expiry}]
+async cancelSubscription(subscriptionId: string) {
+  // Cancel at period end (not immediately)
+  const subscription = await this.stripe.subscriptions.update(
+    subscriptionId,
+    { cancel_at_period_end: true }
+  );
+
+  // Update local record - endDate stays the same
+  await this.subscriptionModel.findOneAndUpdate(
+    { stripeSubscriptionId: subscriptionId },
+    {
+      // endDate remains unchanged - user keeps access until then
+      cancelAtPeriodEnd: true,
+      canceledAt: new Date(),
+    }
+  );
+
+  return {
+    status: subscription.status,
+    cancelAt: subscription.cancel_at,
+    endDate: new Date(subscription.current_period_end * 1000),
+    message: 'Subscription will remain active until ' + 
+             new Date(subscription.current_period_end * 1000).toISOString(),
+  };
+}
+\end{lstlisting}
 
 %% ============================================================================
 %% PLAN MODULE
-%% ============================================================================
-\subsubsection{Plan Module}
-\label{sec:plan_module}
-
-The Plan Module manages subscription plan definitions with versioning support and high-performance Redis caching. Plans are stored as versioned JSON documents, allowing for plan updates without affecting existing subscribers.
-
-\paragraph{Module Structure}
-
-The Plan Module follows the standard NestJS module architecture with a controller for handling HTTP requests, a service for business logic, and MongoDB integration via Mongoose.
-
-\begin{lstlisting}[language=TypeScript, caption={Plan Module Structure}]
-@Module({
-  imports: [
-    MongooseModule.forFeature([{ name: Plan.name, schema: PlanSchema }]),
-  ],
-  controllers: [PlanController],
-  providers: [PlanService],
-  exports: [PlanService],
-})
-export class PlanModule {}
-\end{lstlisting}
-
-\paragraph{Data Model}
-
-Plans are stored with automatic versioning to support historical tracking and rollback capabilities. Each plan document contains a unique identifier, a JSON string with plan details, and an auto-incrementing version number.
-
-\begin{lstlisting}[language=TypeScript, caption={Plan Schema Definition}]
-@Schema({ timestamps: { createdAt: true, updatedAt: false } })
-export class Plan extends Document {
-  @Prop({ required: true, type: String, unique: true })
-  id: string;
-
-  @Prop({ required: true, type: String })
-  plans: string; // JSON string containing plan details
-
-  @Prop({ required: true, type: Number, unique: true })
-  version: number;
-
-  createdAt?: Date;
-}
-\end{lstlisting}
-
-\paragraph{Plan JSON Format}
-
-The \texttt{plans} field stores a stringified JSON object with the following structure:
-
-\begin{lstlisting}[language=TypeScript, caption={Plan JSON Structure}]
-{
-  "plans": [
-    {
-      "id": string,           // Unique plan identifier
-      "name": string,         // Display name
-      "priceId": string,      // Stripe price ID
-      "features": string[],   // List of feature descriptions
-      "recommended": boolean, // Optional: highlight flag
-      "batchDuration": number,// Quota in seconds (-1 for unlimited)
-      "liveDuration": number  // Quota in seconds (-1 for unlimited)
-    }
-  ]
-}
-\end{lstlisting}
-
-\paragraph{Plan JSON Example}
-
-A typical plan configuration includes Free, Basic, and Pro tiers:
-
-\begin{lstlisting}[language=TypeScript, caption={Plan JSON Example}]
-{
-  "plans": [
-    {
-      "id": "basic",
-      "name": "Basic",
-      "priceId": "price_1NqKx2LkdIwHu7ixsKR4L2nS",
-      "features": [
-        "60 minutes batch processing per month",
-        "30 minutes live transcription per month",
-        "Priority support",
-        "High quality audio processing"
-      ],
-      "recommended": false,
-      "batchDuration": 3600,
-      "liveDuration": 1800
-    },
-    {
-      "id": "pro",
-      "name": "Pro",
-      "priceId": "price_1NqKxBLkdIwHu7ixCkcQHZgD",
-      "features": [
-        "Unlimited batch processing",
-        "Unlimited live transcription",
-        "24/7 Premium support",
-        "Highest quality audio processing",
-        "Custom integrations"
-      ],
-      "recommended": true,
-      "batchDuration": -1,
-      "liveDuration": -1
-    }
-  ]
-}
-\end{lstlisting}
-
-\paragraph{Plan Versioning}
-
-Figure~\ref{fig:plan_versioning_flow} shows how plan versions are managed over time, enabling seamless plan updates.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.75\textwidth]{images/plan_versioning_flow.png}
-\caption{Plan Versioning Flow}
-\label{fig:plan_versioning_flow}
-\end{figure}
-
-\paragraph{Redis Caching with Cache Penetration Protection}
-
-The service implements a cache-aside pattern with NULL value caching to prevent cache penetration attacks. Figure~\ref{fig:plan_caching} illustrates this caching strategy.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.65\textwidth]{images/plan_caching.png}
-\caption{Plan Caching with Penetration Protection}
-\label{fig:plan_caching_ch4}
-\end{figure}
-
-\begin{lstlisting}[language=TypeScript, caption={Plan Caching Implementation}]
-@Injectable()
-export class PlanService implements OnModuleInit, OnModuleDestroy {
-  private readonly CACHE_KEY = 'plan:latest';
-  private readonly CACHE_TTL = 3600; // 1 hour
-  private readonly NULL_TTL = 60; // 60 seconds for null cache
-
-  async getLatestVersion(): Promise<Plan | null> {
-    // Check cache first
-    const cached = await this.redisClient.get(this.CACHE_KEY);
-    if (cached) {
-      if (cached === 'NULL') return null; // Cache penetration protection
-      return JSON.parse(cached) as Plan;
-    }
-
-    // Query database
-    const latestPlan = await this.planModel
-      .findOne().sort({ version: -1 }).exec();
-
-    // Cache result (including null to prevent penetration)
-    if (latestPlan) {
-      await this.redisClient.set(this.CACHE_KEY, JSON.stringify(latestPlan), {
-        EX: this.CACHE_TTL,
-      });
-    } else {
-      await this.redisClient.set(this.CACHE_KEY, 'NULL', {
-        EX: this.NULL_TTL,
-      });
-    }
-    return latestPlan;
-  }
-}
-\end{lstlisting}
-
-\paragraph{API Endpoints}
-
-Table~\ref{tab:plan_endpoints} provides a complete list of Plan module endpoints.
-
-\begin{table}[H]
-\centering
-\caption{Plan Module API Endpoints}
-\label{tab:plan_endpoints}
-\begin{tabular}{|l|l|l|p{5cm}|}
-\hline
-\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
-\hline
-GET & /plans/latest & None & Get latest plan version \\
-\hline
-POST & /plans & Admin & Create new plan version \\
-\hline
-\end{tabular}
-\end{table}
-
-\subparagraph{Get Latest Plans}
-
-Retrieves the most recent version of subscription plans. This endpoint is publicly accessible.
-
-\noindent\textbf{Request:}
-\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Request}]
-GET /plans/latest
-\end{lstlisting}
-
-\noindent\textbf{Response:}
-\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Response}]
-{
-  "id": "plan_abc123",
-  "plans": "{\"free\": {...}, \"pro\": {...}}",
-  "version": 3,
-  "createdAt": "2024-01-15T10:30:00Z"
-}
-\end{lstlisting}
-
-\subparagraph{Create Plans (Admin)}
-
-Creates a new plan version. Requires admin privileges. The system automatically increments the version number and invalidates the Redis cache.
-
-\noindent\textbf{Request:}
-\begin{lstlisting}[language=TypeScript, caption={Create Plans Request}]
-POST /plans
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "data": "{\"plans\": [{\"name\": \"Free\", ...}, {\"name\": \"Pro\", ...}]}"
-}
-\end{lstlisting}
-
-\noindent\textbf{Response:}
-\begin{lstlisting}[language=TypeScript, caption={Create Plans Response}]
-{
-  "id": "plan_def456",
-  "plans": "{...}",
-  "version": 4,
-  "createdAt": "2024-01-20T14:00:00Z"
-}
-\end{lstlisting}
-
-%% ============================================================================
-%% SUBSCRIPTION MODULE
-%% ============================================================================
-\subsubsection{Subscription Module}
-\label{sec:subscription_module}
-
-The Subscription Module tracks user subscriptions, manages quotas, monitors usage, and handles scheduled plan changes. It serves as the central source of truth for user subscription state.
-
-\paragraph{Module Structure}
-
-The Subscription Module follows a similar architecture pattern, providing dedicated endpoints for subscription management and exporting the service for use by other modules.
-
-\begin{lstlisting}[language=TypeScript, caption={Subscription Module Structure}]
-@Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Subscription.name, schema: SubscriptionSchema },
-    ]),
-  ],
-  controllers: [SubscriptionController],
-  providers: [SubscriptionService],
-  exports: [SubscriptionService],
-})
-export class SubscriptionModule {}
-\end{lstlisting}
-
-\paragraph{Data Model}
-
-The Subscription schema captures comprehensive subscription state including Stripe integration fields, quota management, usage tracking, and scheduled plan changes. The schema uses MongoDB's embedded document pattern for quota and usage objects.
-
-\begin{lstlisting}[language=TypeScript, caption={Subscription Schema}]
-@Schema({ timestamps: true })
-export class Subscription extends Document {
-  @Prop({ required: true, ref: User.name, type: ObjectId })
-  user: string | User;
-
-  // Stripe integration fields
-  @Prop({ type: String }) stripeSubscriptionId?: string;
-  @Prop({ type: String }) stripeCustomerId?: string;
-  @Prop({ type: String }) planName?: string;
-  @Prop({ type: String }) priceId?: string;
-  @Prop({ type: String }) planId?: string;
-
-  // Scheduled change fields (for plan upgrades/downgrades)
-  @Prop({ type: String }) scheduledPriceId?: string;
-  @Prop({ type: String }) scheduledPlanId?: string;
-  @Prop({ type: String }) scheduledPlanName?: string;
-  @Prop({ type: String }) stripeScheduleId?: string;
-
-  // Subscription status
-  @Prop({ 
-    type: String, 
-    enum: ['active', 'canceled', 'incomplete', 'incomplete_expired', 
-           'past_due', 'trialing', 'unpaid', 'paused'],
-    default: 'active' 
-  })
-  status: string;
-
-  // Quota and usage tracking
-  @Prop(raw({ batchDuration: Number, liveDuration: Number }))
-  quota: SubscriptionUnit;
-
-  @Prop(raw({ batchDuration: Number, liveDuration: Number }))
-  usage: SubscriptionUnit;
-
-  // Validity period
-  @Prop({ type: Date }) startDate: Date;
-  @Prop({ type: Date }) endDate: Date;
-}
-\end{lstlisting}
-
-\paragraph{Quota Checking}
-
-Figure~\ref{fig:subscription_quota_check} illustrates the subscription and quota validation flow used before processing requests.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{images/subscription_quota_check.png}
-\caption{Subscription Quota Checking Flow}
-\label{fig:subscription_quota_check}
-\end{figure}
-
-The quota checking logic validates user subscriptions and usage limits:
-
-\begin{lstlisting}[language=TypeScript, caption={Subscription Quota Validation}]
-async checkSubscription(userId: string, speechType?: 'live' | 'batch') {
-  const sub = await this.subscriptionModel.findOne({ user: userId }).exec();
-
-  if (!sub) {
-    return { success: false, message: 'User has no subscription' };
-  }
-
-  // Check batch quota (-1 means unlimited)
-  if (speechType === 'batch' && sub.quota.batchDuration !== -1 &&
-      sub.usage.batchDuration > sub.quota.batchDuration) {
-    return { success: false, message: 'Batch quota exceeded' };
-  }
-
-  // Check live quota
-  if (speechType === 'live' && sub.quota.liveDuration !== -1 &&
-      sub.usage.liveDuration > sub.quota.liveDuration) {
-    return { success: false, message: 'Live quota exceeded' };
-  }
-
-  return { success: true, subscription: sub };
-}
-\end{lstlisting}
-
-\paragraph{API Endpoints}
-
-Table~\ref{tab:subscription_endpoints} provides a complete list of Subscription module endpoints.
-
-\begin{table}[H]
-\centering
-\caption{Subscription Module API Endpoints}
-\label{tab:subscription_endpoints}
-\begin{tabular}{|l|l|l|p{5cm}|}
-\hline
-\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
-\hline
-GET & /subscriptions/user/:id & Admin & Get user subscription \\
-\hline
-PUT & /subscriptions/user/:id & Admin & Update user subscription \\
-\hline
-\end{tabular}
-\end{table}
-
-\subparagraph{Get User Subscription (Admin)}
-
-Retrieves subscription details for a specific user.
-
-\noindent\textbf{Request:}
-\begin{lstlisting}[language=TypeScript, caption={Get User Subscription Request}]
-GET /subscriptions/user/6507a1b2c3d4e5f6a7b8c9d0
-Authorization: Bearer <admin-token>
-\end{lstlisting}
-
-\noindent\textbf{Response:}
-\begin{lstlisting}[language=TypeScript, caption={Get User Subscription Response}]
-{
-  "_id": "sub_123456",
-  "user": "6507a1b2c3d4e5f6a7b8c9d0",
-  "status": "active",
-  "planName": "Pro",
-  "quota": {
-    "batchDuration": 3600,
-    "liveDuration": 1800
-  },
-  "usage": {
-    "batchDuration": 1200,
-    "liveDuration": 600
-  },
-  "startDate": "2024-01-01T00:00:00Z",
-  "endDate": "2024-12-31T23:59:59Z"
-}
-\end{lstlisting}
-
-\subparagraph{Update User Subscription (Admin)}
-
-Allows administrators to manually update subscription quotas or extend validity periods.
-
-\noindent\textbf{Request:}
-\begin{lstlisting}[language=TypeScript, caption={Update User Subscription Request}]
-PUT /subscriptions/user/6507a1b2c3d4e5f6a7b8c9d0
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "endDate": "2025-12-31",
-  "batchDuration": 7200,
-  "liveDuration": 3600
-}
-\end{lstlisting}
-
-\noindent\textbf{Response:}
-\begin{lstlisting}[language=TypeScript, caption={Update User Subscription Response}]
-{
-  "_id": "sub_123456",
-  "user": "6507a1b2c3d4e5f6a7b8c9d0",
-  "quota": {
-    "batchDuration": 7200,
-    "liveDuration": 3600
-  },
-  "endDate": "2025-12-31T23:59:59Z"
-}
-\end{lstlisting}
-
-%% ============================================================================
-%% STRIPE MODULE
 %% ============================================================================
 \subsubsection{Stripe Module}
 \label{sec:stripe_module}
@@ -910,4 +655,413 @@ async getPrice(priceId: string): Promise<Stripe.Price> {
     throw error;
   }
 }
+\end{lstlisting}\subsubsection{Subscription Module}
+\label{sec:subscription_module}
+
+The Subscription Module tracks user subscriptions, manages quotas, monitors usage, and handles scheduled plan changes. It serves as the central source of truth for user subscription state.
+
+\paragraph{Module Structure}
+
+The Subscription Module follows a similar architecture pattern, providing dedicated endpoints for subscription management and exporting the service for use by other modules.
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Module Structure}]
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: Subscription.name, schema: SubscriptionSchema },
+    ]),
+  ],
+  controllers: [SubscriptionController],
+  providers: [SubscriptionService],
+  exports: [SubscriptionService],
+})
+export class SubscriptionModule {}
 \end{lstlisting}
+
+\paragraph{Data Model}
+
+The Subscription schema captures comprehensive subscription state including Stripe integration fields, quota management, usage tracking, and scheduled plan changes. The schema uses MongoDB's embedded document pattern for quota and usage objects.
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Schema}]
+@Schema({ timestamps: true })
+export class Subscription extends Document {
+  @Prop({ required: true, ref: User.name, type: ObjectId })
+  user: string | User;
+
+  // Stripe integration fields
+  @Prop({ type: String }) stripeSubscriptionId?: string;
+  @Prop({ type: String }) stripeCustomerId?: string;
+  @Prop({ type: String }) planName?: string;
+  @Prop({ type: String }) priceId?: string;
+  @Prop({ type: String }) planId?: string;
+
+  // Scheduled change fields (for plan upgrades/downgrades)
+  @Prop({ type: String }) scheduledPriceId?: string;
+  @Prop({ type: String }) scheduledPlanId?: string;
+  @Prop({ type: String }) scheduledPlanName?: string;
+  @Prop({ type: String }) stripeScheduleId?: string;
+
+  // Subscription status
+  @Prop({ 
+    type: String, 
+    enum: ['active', 'canceled', 'incomplete', 'incomplete_expired', 
+           'past_due', 'trialing', 'unpaid', 'paused'],
+    default: 'active' 
+  })
+  status: string;
+
+  // Quota and usage tracking
+  @Prop(raw({ batchDuration: Number, liveDuration: Number }))
+  quota: SubscriptionUnit;
+
+  @Prop(raw({ batchDuration: Number, liveDuration: Number }))
+  usage: SubscriptionUnit;
+
+  // Validity period
+  @Prop({ type: Date }) startDate: Date;
+  @Prop({ type: Date }) endDate: Date;
+}
+\end{lstlisting}
+
+\paragraph{Quota Checking}
+
+Figure~\ref{fig:subscription_quota_check} illustrates the subscription and quota validation flow used before processing requests.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/subscription_quota_check.png}
+\caption{Subscription Quota Checking Flow}
+\label{fig:subscription_quota_check}
+\end{figure}
+
+The quota checking logic validates user subscriptions and usage limits:
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Quota Validation}]
+async checkSubscription(userId: string, speechType?: 'live' | 'batch') {
+  const sub = await this.subscriptionModel.findOne({ user: userId }).exec();
+
+  if (!sub) {
+    return { success: false, message: 'User has no subscription' };
+  }
+
+  // Check batch quota (-1 means unlimited)
+  if (speechType === 'batch' && sub.quota.batchDuration !== -1 &&
+      sub.usage.batchDuration > sub.quota.batchDuration) {
+    return { success: false, message: 'Batch quota exceeded' };
+  }
+
+  // Check live quota
+  if (speechType === 'live' && sub.quota.liveDuration !== -1 &&
+      sub.usage.liveDuration > sub.quota.liveDuration) {
+    return { success: false, message: 'Live quota exceeded' };
+  }
+
+  return { success: true, subscription: sub };
+}
+\end{lstlisting}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:subscription_endpoints} provides a complete list of Subscription module endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Subscription Module API Endpoints}
+\label{tab:subscription_endpoints}
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+GET & /subscriptions/user/:id & Admin & Get user subscription \\
+\hline
+PUT & /subscriptions/user/:id & Admin & Update user subscription \\
+\hline
+\end{tabular}
+\end{table}
+
+\subparagraph{Get User Subscription (Admin)}
+
+Retrieves subscription details for a specific user.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Get User Subscription Request}]
+GET /subscriptions/user/6507a1b2c3d4e5f6a7b8c9d0
+Authorization: Bearer <admin-token>
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Get User Subscription Response}]
+{
+  "_id": "sub_123456",
+  "user": "6507a1b2c3d4e5f6a7b8c9d0",
+  "status": "active",
+  "planName": "Pro",
+  "quota": {
+    "batchDuration": 3600,
+    "liveDuration": 1800
+  },
+  "usage": {
+    "batchDuration": 1200,
+    "liveDuration": 600
+  },
+  "startDate": "2024-01-01T00:00:00Z",
+  "endDate": "2024-12-31T23:59:59Z"
+}
+\end{lstlisting}
+
+\subparagraph{Update User Subscription (Admin)}
+
+Allows administrators to manually update subscription quotas or extend validity periods.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Update User Subscription Request}]
+PUT /subscriptions/user/6507a1b2c3d4e5f6a7b8c9d0
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "endDate": "2025-12-31",
+  "batchDuration": 7200,
+  "liveDuration": 3600
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Update User Subscription Response}]
+{
+  "_id": "sub_123456",
+  "user": "6507a1b2c3d4e5f6a7b8c9d0",
+  "quota": {
+    "batchDuration": 7200,
+    "liveDuration": 3600
+  },
+  "endDate": "2025-12-31T23:59:59Z"
+}
+\end{lstlisting}
+
+%% ============================================================================
+%% STRIPE MODULE
+%% ============================================================================
+\subsubsection{Plan Module}
+\label{sec:plan_module}
+
+The Plan Module manages subscription plan definitions with versioning support and high-performance Redis caching. Plans are stored as versioned JSON documents, allowing for plan updates without affecting existing subscribers.
+
+\paragraph{Module Structure}
+
+The Plan Module follows the standard NestJS module architecture with a controller for handling HTTP requests, a service for business logic, and MongoDB integration via Mongoose.
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Module Structure}]
+@Module({
+  imports: [
+    MongooseModule.forFeature([{ name: Plan.name, schema: PlanSchema }]),
+  ],
+  controllers: [PlanController],
+  providers: [PlanService],
+  exports: [PlanService],
+})
+export class PlanModule {}
+\end{lstlisting}
+
+\paragraph{Data Model}
+
+Plans are stored with automatic versioning to support historical tracking and rollback capabilities. Each plan document contains a unique identifier, a JSON string with plan details, and an auto-incrementing version number.
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Schema Definition}]
+@Schema({ timestamps: { createdAt: true, updatedAt: false } })
+export class Plan extends Document {
+  @Prop({ required: true, type: String, unique: true })
+  id: string;
+
+  @Prop({ required: true, type: String })
+  plans: string; // JSON string containing plan details
+
+  @Prop({ required: true, type: Number, unique: true })
+  version: number;
+
+  createdAt?: Date;
+}
+\end{lstlisting}
+
+\paragraph{Plan JSON Format}
+
+The \texttt{plans} field stores a stringified JSON object with the following structure:
+
+\begin{lstlisting}[language=TypeScript, caption={Plan JSON Structure}]
+{
+  "plans": [
+    {
+      "id": string,           // Unique plan identifier
+      "name": string,         // Display name
+      "priceId": string,      // Stripe price ID
+      "features": string[],   // List of feature descriptions
+      "recommended": boolean, // Optional: highlight flag
+      "batchDuration": number,// Quota in seconds (-1 for unlimited)
+      "liveDuration": number  // Quota in seconds (-1 for unlimited)
+    }
+  ]
+}
+\end{lstlisting}
+
+\paragraph{Plan JSON Example}
+
+A typical plan configuration includes Free, Basic, and Pro tiers:
+
+\begin{lstlisting}[language=TypeScript, caption={Plan JSON Example}]
+{
+  "plans": [
+    {
+      "id": "basic",
+      "name": "Basic",
+      "priceId": "price_1NqKx2LkdIwHu7ixsKR4L2nS",
+      "features": [
+        "60 minutes batch processing per month",
+        "30 minutes live transcription per month",
+        "Priority support",
+        "High quality audio processing"
+      ],
+      "recommended": false,
+      "batchDuration": 3600,
+      "liveDuration": 1800
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "priceId": "price_1NqKxBLkdIwHu7ixCkcQHZgD",
+      "features": [
+        "Unlimited batch processing",
+        "Unlimited live transcription",
+        "24/7 Premium support",
+        "Highest quality audio processing",
+        "Custom integrations"
+      ],
+      "recommended": true,
+      "batchDuration": -1,
+      "liveDuration": -1
+    }
+  ]
+}
+\end{lstlisting}
+
+\paragraph{Plan Versioning}
+
+Figure~\ref{fig:plan_versioning_flow} shows how plan versions are managed over time, enabling seamless plan updates.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/plan_versioning_flow.png}
+\caption{Plan Versioning Flow}
+\label{fig:plan_versioning_flow}
+\end{figure}
+
+\paragraph{Redis Caching with Cache Penetration Protection}
+
+The service implements a cache-aside pattern with NULL value caching to prevent cache penetration attacks. Figure~\ref{fig:plan_caching} illustrates this caching strategy.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{images/plan_caching.png}
+\caption{Plan Caching with Penetration Protection}
+\label{fig:plan_caching_ch4}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Caching Implementation}]
+@Injectable()
+export class PlanService implements OnModuleInit, OnModuleDestroy {
+  private readonly CACHE_KEY = 'plan:latest';
+  private readonly CACHE_TTL = 3600; // 1 hour
+  private readonly NULL_TTL = 60; // 60 seconds for null cache
+
+  async getLatestVersion(): Promise<Plan | null> {
+    // Check cache first
+    const cached = await this.redisClient.get(this.CACHE_KEY);
+    if (cached) {
+      if (cached === 'NULL') return null; // Cache penetration protection
+      return JSON.parse(cached) as Plan;
+    }
+
+    // Query database
+    const latestPlan = await this.planModel
+      .findOne().sort({ version: -1 }).exec();
+
+    // Cache result (including null to prevent penetration)
+    if (latestPlan) {
+      await this.redisClient.set(this.CACHE_KEY, JSON.stringify(latestPlan), {
+        EX: this.CACHE_TTL,
+      });
+    } else {
+      await this.redisClient.set(this.CACHE_KEY, 'NULL', {
+        EX: this.NULL_TTL,
+      });
+    }
+    return latestPlan;
+  }
+}
+\end{lstlisting}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:plan_endpoints} provides a complete list of Plan module endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Plan Module API Endpoints}
+\label{tab:plan_endpoints}
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+GET & /plans/latest & None & Get latest plan version \\
+\hline
+POST & /plans & Admin & Create new plan version \\
+\hline
+\end{tabular}
+\end{table}
+
+\subparagraph{Get Latest Plans}
+
+Retrieves the most recent version of subscription plans. This endpoint is publicly accessible.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Request}]
+GET /plans/latest
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Response}]
+{
+  "id": "plan_abc123",
+  "plans": "{\"free\": {...}, \"pro\": {...}}",
+  "version": 3,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+\end{lstlisting}
+
+\subparagraph{Create Plans (Admin)}
+
+Creates a new plan version. Requires admin privileges. The system automatically increments the version number and invalidates the Redis cache.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Create Plans Request}]
+POST /plans
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "data": "{\"plans\": [{\"name\": \"Free\", ...}, {\"name\": \"Pro\", ...}]}"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Create Plans Response}]
+{
+  "id": "plan_def456",
+  "plans": "{...}",
+  "version": 4,
+  "createdAt": "2024-01-20T14:00:00Z"
+}
+\end{lstlisting}
+
+%% ============================================================================
+%% SUBSCRIPTION MODULE
+%% ============================================================================

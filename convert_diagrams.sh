@@ -20,7 +20,7 @@ for file in diagrams/*.mmd; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" .mmd)
         echo "Converting $filename..."
-        mmdc -i "$file" -o "images/${filename}.png" -w 1200 -b transparent
+        mmdc -i "$file" -o "images/${filename}.png" -w 1600 -b white
     fi
 done
 

@@ -1,0 +1,26 @@
+flowchart TD
+    Start([Webhook Received]) --> Verify{Verify Signature?}
+    Verify -- Invalid --> Error[Throw BadRequest]
+    Verify -- Valid --> Type{Event Type?}
+
+    Type -- checkout.session.completed --> GetSession[Get Session & Line Items]
+    GetSession --> FindPlan[Find Matching Plan]
+    FindPlan --> FindUser[Extract User ID]
+    FindUser --> CreateSub[Create/Update Subscription]
+    CreateSub --> Active([Status: Active])
+
+    Type -- subscription_schedule.updated --> GetSchedule[Get Schedule Details]
+    GetSchedule --> FindSub[Find Subscription]
+    FindSub --> CheckPhase{Next Phase?}
+    CheckPhase -- Yes --> UpdateScheduled[Update Scheduled Fields]
+    CheckPhase -- No --> NoOp[No Opeartion]
+    UpdateScheduled --> Scheduled([Status: Change Scheduled])
+
+    Type -- subscription_schedule.released --> FindSubRel[Find Subscription]
+    FindSubRel --> ClearFields[Clear Scheduled Fields]
+    ClearFields --> Cleared([Status: Schedule Cleared])
+
+    Type -- invoice.payment_failed --> LogWarn[Log Warning]
+    LogWarn --> Notify[Notify User]
+
+    Type -- Other --> Ignore[Log & Ignore]

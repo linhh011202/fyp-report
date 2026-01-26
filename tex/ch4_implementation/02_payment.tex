@@ -128,8 +128,168 @@ async createCheckoutSession(@Body() dto: CreateCheckoutSessionDto, @Req() req) {
 }
 \end{lstlisting}
 
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{POST /stripe/stripe-checkout-session} \\
+\hline
+\textbf{Request} & \texttt{\{ "priceId": "price\_123..." \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "url": "https://...", "sessionId": "cs\_test..." \}} \\
+\hline
+\end{tabular}
+\caption{API: Create Checkout Session}
+\end{table}
 
-Webhooks process subscription events with signature verification:
+
+\subsubsection{Subscription Scheduling}
+
+To support plan upgrades and downgrades without immediate billing impact, we implement a scheduling system using Stripe Subscription Schedules.
+
+\noindent\textbf{Scheduling Flow}\\
+
+Figure~\ref{fig:subscription_scheduling_flow} details the sequence for scheduling a plan change.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/subscription_scheduling_flow.png}
+\caption{Subscription Plan Change Sequence}
+\label{fig:subscription_scheduling_flow}
+\end{figure}
+
+The \texttt{StripeService.schedulePlanChange} method handles this logic:
+\begin{enumerate}
+    \item Retrieves current subscription details to identify the \texttt{current\_period\_end}.
+    \item Checks for any existing subscription schedules to prevent conflicts or duplicates.
+    \item If a schedule exists, it updates the subsequent phase with the new price.
+    \item If no schedule exists, it creates a new one from the current subscription and appends a new phase for the plan change.
+\end{enumerate}
+
+\noindent\textbf{Advanced Scheduling Logic}\\
+
+The implementation handles complex scenarios such as modifying an already scheduled change. As shown in Listing~\ref{lst:schedule_logic}, the system first checks for an `active` or `\texttt{not\_started}` schedule.
+
+\begin{lstlisting}[language=TypeScript, caption={Smart Scheduling Logic in StripeService}, label={lst:schedule_logic}]
+async schedulePlanChange(subscriptionId: string, newPriceId: string) {
+  // 1. Get current subscription items
+  const subscription = await this.stripe.subscriptions.retrieve(
+    subscriptionId, { expand: ['items'] }
+  );
+
+  // 2. Check for existing schedules
+  const schedules = await this.stripe.subscriptionSchedules.list({
+    customer: subscription.customer as string,
+  });
+  const activeSchedule = schedules.data.find(s => 
+    s.subscription === subscriptionId && 
+    (s.status === 'active' || s.status === 'not_started')
+  );
+
+  if (activeSchedule) {
+    // 3a. Update existing schedule: keep current phase, update next
+    const currentPhase = activeSchedule.phases[0];
+    return this.stripe.subscriptionSchedules.update(activeSchedule.id, {
+      phases: [
+        { ...currentPhase }, // Preserve current billing period
+        { items: [{ price: newPriceId, quantity: 1 }] } // New plan starts next
+      ]
+    });
+  }
+
+  // 3b. Create new schedule from subscription
+  const schedule = await this.stripe.subscriptionSchedules.create({
+    from_subscription: subscriptionId,
+  });
+  
+  // 4. Update the newly created schedule
+  return this.stripe.subscriptionSchedules.update(schedule.id, {
+    phases: [
+      { ...schedule.phases[0] }, // Current phase
+      { items: [{ price: newPriceId, quantity: 1 }] } // Next phase
+    ]
+  });
+}
+\end{lstlisting}
+
+This approach ensures that user billing remains accurate. The user is not charged immediately; instead, the change takes effect exactly when the current billing cycle renews.
+
+\noindent\textbf{Managing Scheduled Changes}\\
+
+Users retain control over their scheduled changes. The system provides endpoints to retrieve schedule status and cancel pending changes if needed.
+
+\begin{lstlisting}[language=TypeScript, caption={Controller endpoints for Schedule Management}]
+@Post('get-schedule-info')
+async getScheduleInfo(@Body() dto: GetScheduleInfoDto) {
+  const schedule = await this.stripeService.getSubscriptionSchedule(
+    dto.subscriptionId
+  );
+  if (!schedule) return { hasSchedule: false };
+  
+  const nextPhase = schedule.phases[1];
+  return {
+    hasSchedule: true,
+    nextPriceId: nextPhase?.items[0]?.price,
+    startDate: nextPhase?.start_date
+  };
+}
+
+@Post('cancel-scheduled-change')
+async cancelScheduledChange(@Body() dto: CancelScheduledChangeDto) {
+  // Releases the schedule, reverting to standard subscription behavior
+  return this.stripeService.cancelScheduledChange(dto.scheduleId);
+}
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{POST /stripe/schedule-plan-change} \\
+\hline
+\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_...", "newPriceId": "price\_..." \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "scheduleId": "sub\_sched\_...", "status": "active" \}} \\
+\hline
+\end{tabular}
+\caption{API: Schedule Plan Change}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{POST /stripe/get-schedule-info} \\
+\hline
+\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_..." \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "hasSchedule": true, "nextPriceId": "price\_..." \}} \\
+\hline
+\end{tabular}
+\caption{API: Get Schedule Info}
+\end{table}
+
+\subsubsection{Webhook Processing Logic}
+
+Webhooks are central to maintaining synchronization between Stripe and our database.
+
+\noindent\textbf{Webhook Flowchart}\\
+
+Figure~\ref{fig:webhook_processing_logic} illustrates the decision logic for handling various Stripe events.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/webhook_processing_logic.png}
+\caption{Stripe Webhook Processing Logic}
+\label{fig:webhook_processing_logic}
+\end{figure}
+
+The \texttt{handleWebhook} method switches on \texttt{event.type}:
+\begin{itemize}
+    \item \texttt{checkout.session.completed}: Activates new subscriptions.
+    \item \texttt{subscription\_schedule.updated}: Updates local DB with \texttt{scheduledPriceId} and \texttt{scheduledPlanId}.
+    \item \texttt{subscription\_schedule.released}: Clears scheduled fields if the user cancels the pending change.
+\end{itemize}
 
 \begin{lstlisting}[language=TypeScript, caption={Stripe Webhook Handler}]
 @Post('webhook')
@@ -143,22 +303,23 @@ async handleWebhook(@Headers('stripe-signature') signature, @Req() req) {
       const fullSession = await this.stripeService.getSessionWithLineItems(
         session.id
       );
-      const userId = fullSession.metadata?.userId;
-      const priceId = fullSession.line_items?.data?.[0]?.price?.id;
-
-      // Find matching plan and create/update subscription
-      const latestPlans = await this.planService.getLatestVersion();
-      const plansData = JSON.parse(latestPlans.plans);
-      const matchingPlan = plansData.plans.find(p => p.priceId === priceId);
-      // ... create or update subscription
+      // ... Processing logic
       break;
 
     case 'subscription_schedule.updated':
-      // Update scheduled plan change info
+      const schedule = event.data.object;
+      const nextPhase = schedule.phases[1];
+      if (nextPhase) {
+         // Update subscription with scheduled plan details
+         await this.subscriptionService.updateById(subId, {
+           scheduledPriceId: nextPhase.items[0].price,
+           // ...
+         });
+      }
       break;
 
     case 'subscription_schedule.released':
-      // Clear scheduled change fields
+      // Clear scheduled fields
       break;
   }
   return { received: true };
@@ -261,12 +422,123 @@ async getPrice(priceId: string): Promise<Stripe.Price> {
     throw error;
   }
 }
+\subsubsection{Subscription Lifecycle Management}
+
+Beyond scheduling changes, the system provides full lifecycle management allowing users to cancel and resume their subscriptions.
+
+\noindent\textbf{Cancellation and Resumption Flow}\\
+
+Users can cancel their subscription, which sets the `cancel_at_period_end` flag in Stripe. This keeps the subscription active until the end of the billing cycle. If they change their mind, they can resume it before the cycle ends.
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Cancellation and Resumption}]
+@UseGuards(JwtAuthGuard)
+@Post('cancel-subscription')
+async cancelSubscription(@Body() dto: CancelSubscriptionDto, @Req() req) {
+  // Calls Stripe to update subscription with cancel_at_period_end = true
+  return this.stripeService.cancelSubscription(dto.subscriptionId);
+}
+
+@Post('resume-subscription')
+async resumeSubscription(@Body() dto: ResumeSubscriptionDto) {
+  // Reverts cancellation by setting cancel_at_period_end = false
+  return this.stripeService.resumeSubscription(dto.subscriptionId);
+}
 \end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{POST /stripe/cancel-subscription} \\
+\hline
+\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_..." \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "status": "active", "cancelAtPeriodEnd": true \}} \\
+\hline
+\end{tabular}
+\caption{API: Cancel Subscription}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{POST /stripe/resume-subscription} \\
+\hline
+\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_..." \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "status": "active", "cancelAtPeriodEnd": false \}} \\
+\hline
+\end{tabular}
+\caption{API: Resume Subscription}
+\end{table}
+
+\subsubsection{Administrative Operations}
+
+To support operations, the system includes secured endpoints for administrators to manage plans and user subscriptions.
+
+\noindent\textbf{Plan Management}\\
+
+Administrators can publish new plan versions. The system automatically handles version incrementing and invalidates the Redis cache.
+
+\begin{lstlisting}[language=TypeScript, caption={Admin Plan Creation}]
+@Roles(Role.Admin)
+@Post()
+async create(@Body() dto: CreatePlansDto) {
+  // Validates structure and creates new versioned plan document
+  const result = await this.planService.create(dto.data);
+  return result;
+}
+\end{lstlisting}
+
+\noindent\textbf{User Subscription Administration}\\
+
+Admins can manually intervene to update subscription quotas or extend validity periods for specific users.
+
+\begin{lstlisting}[language=TypeScript, caption={Admin Subscription Update}]
+@Roles(Role.Admin)
+@Put('/user/:id')
+async updateSubscriptionByUser(@Body() body: UpdateSubscriptionByUserDto, @Param() params) {
+  // Manually update quota or end date
+  return this.subscriptionService.updateByUser(params.id, {
+    endDate: new Date(body.endDate),
+    'quota.batchDuration': body.batchDuration,
+    'quota.liveDuration': body.liveDuration,
+  }, true);
+}
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{POST /plans} (Admin) \\
+\hline
+\textbf{Request} & \texttt{\{ "data": "\{\textbackslash"plans\textbackslash": [...]\}" \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "plans": "...", "version": 5 \}} \\
+\hline
+\end{tabular}
+\caption{API: Create Plans}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \texttt{PUT /subscriptions/user/:id} (Admin) \\
+\hline
+\textbf{Request} & \texttt{\{ "endDate": "2024-12-31", ... \}} \\
+\hline
+\textbf{Response} & \texttt{\{ "\_id": "...", "quota": \{...\}, "endDate": "..." \}} \\
+\hline
+\end{tabular}
+\caption{API: Update User Subscription}
+\end{table}
 
 \subsubsection{Module Dependencies}
 
 The Stripe module integrates with Subscription and Plan modules:
-
 \begin{lstlisting}[language=TypeScript, caption={Stripe Module Configuration}]
 @Module({
   imports: [

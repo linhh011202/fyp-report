@@ -1,0 +1,28 @@
+sequenceDiagram
+    participant U as User
+    participant B as Backend
+    participant S as Stripe API
+    participant D as Database
+
+    U->>B: Request Plan Change (Upgrade/Downgrade)
+    activate B
+    B->>D: Get Current Subscription
+    D-->>B: Subscription Data
+    B->>S: Get/Create Subscription Schedule
+    activate S
+    S-->>B: Schedule Details
+    deactivate S
+    B->>S: Update Schedule (New Price)
+    activate S
+    S-->>B: Updated Schedule (Next Phase)
+    deactivate S
+    B-->>U: Change Scheduled Response
+    deactivate B
+
+    Note over S,B: Asynchronous Webhook Event
+    S->>B: Webhook: subscription_schedule.updated
+    activate B
+    B->>D: Find Subscription
+    D-->>B: Subscription Doc
+    B->>D: Update (scheduledPriceId, scheduledPlanId)
+    deactivate B

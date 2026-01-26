@@ -1,0 +1,45 @@
+sequenceDiagram
+    participant Client
+    participant Controller as AuthController
+    participant Service as AuthService
+    participant UserSvc as UserService
+    participant AppSvc as ApplicationService
+    participant QueueSvc as QueueService
+    participant DB as MongoDB
+
+    Client->>Controller: POST /auth/register
+    Note over Client,Controller: Body: {name, email, password, appId?, appSecret?}
+    
+    Controller->>Service: register(payload)
+    
+    alt Has appId and appSecret
+        Service->>AppSvc: findOneAndVerifySecret({appId, secret})
+        alt Application not found
+            AppSvc-->>Service: null
+            Service-->>Client: 404 Application not found
+        end
+        AppSvc-->>Service: Application with queue
+        Service->>QueueSvc: findById(app.queue)
+        QueueSvc-->>Service: Queue with code
+        Note over Service: type = queue.code
+    else No app credentials
+        Note over Service: type = 'trial'
+    end
+    
+    Service->>UserSvc: create({email, password, name, type})
+    
+    alt Duplicate email (MongoDB error 11000)
+        UserSvc-->>Service: Error
+        Service-->>Client: 422 Duplicate record
+    end
+    
+    UserSvc->>DB: Insert user
+    DB-->>UserSvc: User document
+    UserSvc-->>Service: User
+    
+    alt Email verification enabled
+        Service->>Service: sendVerification(user)
+        Service-->>Client: 200 Please check email
+    else Email verification disabled
+        Service-->>Client: 200 Account created
+    end

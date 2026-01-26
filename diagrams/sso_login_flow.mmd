@@ -1,0 +1,52 @@
+sequenceDiagram
+    participant Client as Mobile/Web Client
+    participant Controller as AuthController
+    participant Service as AuthService
+    participant Google as Google OAuth
+    participant Apple as Apple Sign In
+    participant MS as Microsoft Azure AD
+    participant UserSvc as UserService
+    participant JWT as JwtService
+    participant DB as MongoDB
+
+    Client->>Controller: POST /auth/login-sso
+    Note over Client,Controller: Body: {token, oauthClient, appId?, appSecret?}
+    
+    alt oauthClient = 'google'
+        Controller->>Service: ssoLogin(token, 'google', ...)
+        Service->>Google: verifyIdToken(token, audience)
+        Google-->>Service: {email, name, picture}
+    else oauthClient = 'apple'
+        Controller->>Service: ssoLogin(token, 'apple', ...)
+        Service->>Apple: verifyAppleToken(token)
+        Apple-->>Service: {email, sub}
+    else oauthClient = 'microsoft'
+        Controller->>Service: ssoLogin(token, 'microsoft', ...)
+        Service->>MS: verifyMicrosoftToken(token)
+        MS-->>Service: {email, upn, name}
+    end
+    
+    alt Token verification failed
+        Service-->>Client: 401 Invalid SSO token
+    end
+    
+    Service->>UserSvc: findOne({email})
+    
+    alt User not found
+        Service->>Service: register({email, name, randomPassword})
+        Service->>UserSvc: create(newUser)
+        UserSvc-->>Service: New user
+    end
+    
+    UserSvc-->>Service: User document
+    
+    Service->>Service: revokeAllUserTokens(userId)
+    Service->>DB: Bulk insert to TokenBlacklist
+    Service->>DB: Delete from UserTokens
+    
+    Service->>JWT: sign(payload, options)
+    JWT-->>Service: accessToken
+    
+    Service->>DB: Insert to UserTokens
+    
+    Service-->>Client: 200 {accessToken, subscriptionEnd, isVerified}

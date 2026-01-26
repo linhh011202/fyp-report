@@ -1,0 +1,62 @@
+sequenceDiagram
+    participant Client as Frontend
+    participant SSO as SSO Controller
+    participant Auth as AuthController
+    participant Service as AuthService
+    participant JWT as JwtService
+    participant UserSvc as UserService
+    participant DB as MongoDB
+
+    Note over Client: User initiates Google/Apple SSO
+    
+    alt Google SSO Flow
+        Client->>SSO: GET /auth/google/callback
+    else Apple SSO Flow
+        Client->>SSO: POST /auth/apple/callback
+    end
+    
+    SSO->>Service: checkUserByEmail(email)
+    Service->>UserSvc: findOne({email})
+    UserSvc-->>Service: null (new user)
+    
+    Service-->>SSO: {requiresPassword: true, email}
+    
+    SSO->>Service: generateTemporaryToken(email, appId, appSecret)
+    Service->>JWT: sign({email, need_password: true}, {expiresIn: '15m'})
+    JWT-->>Service: temporaryToken
+    Service-->>SSO: temporaryToken
+    
+    SSO->>Client: HTML + JS: localStorage.setItem('temporaryToken', token)
+    Note over Client: Redirect to /complete-signup
+    
+    Client->>Auth: POST /auth/add-info
+    Note over Client,Auth: Body: {token, password, fullname}
+    
+    Auth->>Service: addUserFromToken(token, password, fullname)
+    
+    Service->>JWT: verify(token)
+    alt Token expired
+        JWT-->>Service: TokenExpiredError
+        Service-->>Client: 401 Token expired. Sign in again.
+    end
+    JWT-->>Service: {email, need_password, appId, appSecret}
+    
+    alt Not a password setup token
+        Service-->>Client: 400 Invalid token
+    end
+    
+    Service->>UserSvc: findOne({email})
+    alt User already exists
+        UserSvc-->>Service: User
+        Service-->>Client: 409 User already exists
+    end
+    
+    Service->>Service: register({email, name, password})
+    Service->>UserSvc: create(userData)
+    UserSvc->>DB: Insert user
+    DB-->>UserSvc: User document
+    
+    Service->>Service: login(user)
+    Service->>DB: Store token in UserTokens
+    
+    Service-->>Client: 200 {accessToken, subscriptionEnd, isVerified}

@@ -1,9 +1,9 @@
 \subsection{Payment \& Subscription Management}%
 \label{sec:payment}
 
-This subsection documents the payment processing and subscription management system built with Stripe integration, Redis caching, and MongoDB persistence.
+This subsection documents the payment processing and subscription management system built with Stripe integration, Redis caching, and MongoDB persistence. The system is organized into three distinct backend modules that handle different aspects of the payment workflow.
 
-\subsubsection{Architecture Overview}
+\paragraph{Architecture Overview}
 
 Figure~\ref{fig:payment_architecture} illustrates the payment system architecture showing the interaction between modules.
 
@@ -17,16 +17,38 @@ Figure~\ref{fig:payment_architecture} illustrates the payment system architectur
 The payment system consists of three main modules:
 
 \begin{itemize}
-    \item \textbf{StripeModule}: Handles Stripe API interactions, checkout sessions, webhooks
-    \item \textbf{PlanModule}: Manages subscription plans with versioning and Redis caching
-    \item \textbf{SubscriptionModule}: Tracks user subscriptions, quotas, and usage
+    \item \textbf{Plan Module}: Manages subscription plans with versioning and Redis caching
+    \item \textbf{Subscription Module}: Tracks user subscriptions, quotas, and usage
+    \item \textbf{Stripe Module}: Handles Stripe API interactions, checkout sessions, webhooks, and billing operations
 \end{itemize}
 
-\subsubsection{Plan Management}
+%% ============================================================================
+%% PLAN MODULE
+%% ============================================================================
+\subsubsection{Plan Module}
+\label{sec:plan_module}
 
-Plans are stored as versioned JSON documents, cached in Redis for fast retrieval.
+The Plan Module manages subscription plan definitions with versioning support and high-performance Redis caching. Plans are stored as versioned JSON documents, allowing for plan updates without affecting existing subscribers.
 
-\noindent\textbf{Plan Schema}\\
+\paragraph{Module Structure}
+
+The Plan Module follows the standard NestJS module architecture with a controller for handling HTTP requests, a service for business logic, and MongoDB integration via Mongoose.
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Module Structure}]
+@Module({
+  imports: [
+    MongooseModule.forFeature([{ name: Plan.name, schema: PlanSchema }]),
+  ],
+  controllers: [PlanController],
+  providers: [PlanService],
+  exports: [PlanService],
+})
+export class PlanModule {}
+\end{lstlisting}
+
+\paragraph{Data Model}
+
+Plans are stored with automatic versioning to support historical tracking and rollback capabilities. Each plan document contains a unique identifier, a JSON string with plan details, and an auto-incrementing version number.
 
 \begin{lstlisting}[language=TypeScript, caption={Plan Schema Definition}]
 @Schema({ timestamps: { createdAt: true, updatedAt: false } })
@@ -35,7 +57,7 @@ export class Plan extends Document {
   id: string;
 
   @Prop({ required: true, type: String })
-  plans: string; // JSON string of plan details
+  plans: string; // JSON string containing plan details
 
   @Prop({ required: true, type: Number, unique: true })
   version: number;
@@ -44,9 +66,69 @@ export class Plan extends Document {
 }
 \end{lstlisting}
 
-\noindent\textbf{Plan Versioning}\\
+\paragraph{Plan JSON Format}
 
-Figure~\ref{fig:plan_versioning_flow} shows how plan versions are managed over time.
+The \texttt{plans} field stores a stringified JSON object with the following structure:
+
+\begin{lstlisting}[language=TypeScript, caption={Plan JSON Structure}]
+{
+  "plans": [
+    {
+      "id": string,           // Unique plan identifier
+      "name": string,         // Display name
+      "priceId": string,      // Stripe price ID
+      "features": string[],   // List of feature descriptions
+      "recommended": boolean, // Optional: highlight flag
+      "batchDuration": number,// Quota in seconds (-1 for unlimited)
+      "liveDuration": number  // Quota in seconds (-1 for unlimited)
+    }
+  ]
+}
+\end{lstlisting}
+
+\paragraph{Plan JSON Example}
+
+A typical plan configuration includes Free, Basic, and Pro tiers:
+
+\begin{lstlisting}[language=TypeScript, caption={Plan JSON Example}]
+{
+  "plans": [
+    {
+      "id": "basic",
+      "name": "Basic",
+      "priceId": "price_1NqKx2LkdIwHu7ixsKR4L2nS",
+      "features": [
+        "60 minutes batch processing per month",
+        "30 minutes live transcription per month",
+        "Priority support",
+        "High quality audio processing"
+      ],
+      "recommended": false,
+      "batchDuration": 3600,
+      "liveDuration": 1800
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "priceId": "price_1NqKxBLkdIwHu7ixCkcQHZgD",
+      "features": [
+        "Unlimited batch processing",
+        "Unlimited live transcription",
+        "24/7 Premium support",
+        "Highest quality audio processing",
+        "Custom integrations"
+      ],
+      "recommended": true,
+      "batchDuration": -1,
+      "liveDuration": -1
+    }
+  ]
+}
+\end{lstlisting}
+
+\paragraph{Plan Versioning}
+
+Figure~\ref{fig:plan_versioning_flow} shows how plan versions are managed over time, enabling seamless plan updates.
 
 \begin{figure}[H]
 \centering
@@ -55,13 +137,14 @@ Figure~\ref{fig:plan_versioning_flow} shows how plan versions are managed over t
 \label{fig:plan_versioning_flow}
 \end{figure}
 
-\noindent\textbf{Redis Caching with Cache Penetration Protection}\\
+\paragraph{Redis Caching with Cache Penetration Protection}
 
-Figure~\ref{fig:plan_caching} illustrates the cache-aside pattern with NULL value caching.
+The service implements a cache-aside pattern with NULL value caching to prevent cache penetration attacks. Figure~\ref{fig:plan_caching} illustrates this caching strategy.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.65\textwidth]{images/plan_caching.png}
+\caption{Plan Caching with Penetration Protection}
 \label{fig:plan_caching_ch4}
 \end{figure}
 
@@ -70,18 +153,21 @@ Figure~\ref{fig:plan_caching} illustrates the cache-aside pattern with NULL valu
 export class PlanService implements OnModuleInit, OnModuleDestroy {
   private readonly CACHE_KEY = 'plan:latest';
   private readonly CACHE_TTL = 3600; // 1 hour
-  private readonly NULL_TTL = 60; // 60 seconds
+  private readonly NULL_TTL = 60; // 60 seconds for null cache
 
   async getLatestVersion(): Promise<Plan | null> {
+    // Check cache first
     const cached = await this.redisClient.get(this.CACHE_KEY);
     if (cached) {
       if (cached === 'NULL') return null; // Cache penetration protection
       return JSON.parse(cached) as Plan;
     }
 
+    // Query database
     const latestPlan = await this.planModel
       .findOne().sort({ version: -1 }).exec();
 
+    // Cache result (including null to prevent penetration)
     if (latestPlan) {
       await this.redisClient.set(this.CACHE_KEY, JSON.stringify(latestPlan), {
         EX: this.CACHE_TTL,
@@ -96,246 +182,106 @@ export class PlanService implements OnModuleInit, OnModuleDestroy {
 }
 \end{lstlisting}
 
-\subsubsection{Stripe Integration}
+\paragraph{API Endpoints}
 
-\noindent\textbf{Checkout Flow}\\
-
-Figure~\ref{fig:stripe_checkout_flow} shows the complete Stripe Checkout flow from user request to subscription creation.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.9\textwidth]{images/stripe_checkout_flow.png}
-\caption{Stripe Checkout Session Flow}
-\label{fig:stripe_checkout_flow}
-\end{figure}
-
-\noindent\textbf{Checkout Session Creation}\\
-
-\begin{lstlisting}[language=TypeScript, caption={Checkout Session Creation}]
-@UseGuards(JwtAuthGuard)
-@Post('stripe-checkout-session')
-async createCheckoutSession(@Body() dto: CreateCheckoutSessionDto, @Req() req) {
-  const userId = req.user?._id?.toString();
-  const customerEmail = req.user?.email;
-
-  const result = await this.stripeService.createCheckoutSession(
-    dto.priceId,
-    customerEmail,
-    customerName,
-    userId, // Stored in metadata for webhook
-  );
-  return result;
-}
-\end{lstlisting}
+Table~\ref{tab:plan_endpoints} provides a complete list of Plan module endpoints.
 
 \begin{table}[H]
 \centering
-\begin{tabular}{|l|p{10cm}|}
+\caption{Plan Module API Endpoints}
+\label{tab:plan_endpoints}
+\begin{tabular}{|l|l|l|p{5cm}|}
 \hline
-\textbf{Endpoint} & \texttt{POST /stripe/stripe-checkout-session} \\
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
 \hline
-\textbf{Request} & \texttt{\{ "priceId": "price\_123..." \}} \\
+GET & /plans/latest & None & Get latest plan version \\
 \hline
-\textbf{Response} & \texttt{\{ "url": "https://...", "sessionId": "cs\_test..." \}} \\
+POST & /plans & Admin & Create new plan version \\
 \hline
 \end{tabular}
-\caption{API: Create Checkout Session}
 \end{table}
 
+\subparagraph{Get Latest Plans}
 
-\subsubsection{Subscription Scheduling}
+Retrieves the most recent version of subscription plans. This endpoint is publicly accessible.
 
-To support plan upgrades and downgrades without immediate billing impact, we implement a scheduling system using Stripe Subscription Schedules.
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Request}]
+GET /plans/latest
+\end{lstlisting}
 
-\noindent\textbf{Scheduling Flow}\\
-
-Figure~\ref{fig:subscription_scheduling_flow} details the sequence for scheduling a plan change.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{images/subscription_scheduling_flow.png}
-\caption{Subscription Plan Change Sequence}
-\label{fig:subscription_scheduling_flow}
-\end{figure}
-
-The \texttt{StripeService.schedulePlanChange} method handles this logic:
-\begin{enumerate}
-    \item Retrieves current subscription details to identify the \texttt{current\_period\_end}.
-    \item Checks for any existing subscription schedules to prevent conflicts or duplicates.
-    \item If a schedule exists, it updates the subsequent phase with the new price.
-    \item If no schedule exists, it creates a new one from the current subscription and appends a new phase for the plan change.
-\end{enumerate}
-
-\noindent\textbf{Advanced Scheduling Logic}\\
-
-The implementation handles complex scenarios such as modifying an already scheduled change. As shown in Listing~\ref{lst:schedule_logic}, the system first checks for an `active` or `\texttt{not\_started}` schedule.
-
-\begin{lstlisting}[language=TypeScript, caption={Smart Scheduling Logic in StripeService}, label={lst:schedule_logic}]
-async schedulePlanChange(subscriptionId: string, newPriceId: string) {
-  // 1. Get current subscription items
-  const subscription = await this.stripe.subscriptions.retrieve(
-    subscriptionId, { expand: ['items'] }
-  );
-
-  // 2. Check for existing schedules
-  const schedules = await this.stripe.subscriptionSchedules.list({
-    customer: subscription.customer as string,
-  });
-  const activeSchedule = schedules.data.find(s => 
-    s.subscription === subscriptionId && 
-    (s.status === 'active' || s.status === 'not_started')
-  );
-
-  if (activeSchedule) {
-    // 3a. Update existing schedule: keep current phase, update next
-    const currentPhase = activeSchedule.phases[0];
-    return this.stripe.subscriptionSchedules.update(activeSchedule.id, {
-      phases: [
-        { ...currentPhase }, // Preserve current billing period
-        { items: [{ price: newPriceId, quantity: 1 }] } // New plan starts next
-      ]
-    });
-  }
-
-  // 3b. Create new schedule from subscription
-  const schedule = await this.stripe.subscriptionSchedules.create({
-    from_subscription: subscriptionId,
-  });
-  
-  // 4. Update the newly created schedule
-  return this.stripe.subscriptionSchedules.update(schedule.id, {
-    phases: [
-      { ...schedule.phases[0] }, // Current phase
-      { items: [{ price: newPriceId, quantity: 1 }] } // Next phase
-    ]
-  });
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Get Latest Plans Response}]
+{
+  "id": "plan_abc123",
+  "plans": "{\"free\": {...}, \"pro\": {...}}",
+  "version": 3,
+  "createdAt": "2024-01-15T10:30:00Z"
 }
 \end{lstlisting}
 
-This approach ensures that user billing remains accurate. The user is not charged immediately; instead, the change takes effect exactly when the current billing cycle renews.
+\subparagraph{Create Plans (Admin)}
 
-\noindent\textbf{Managing Scheduled Changes}\\
+Creates a new plan version. Requires admin privileges. The system automatically increments the version number and invalidates the Redis cache.
 
-Users retain control over their scheduled changes. The system provides endpoints to retrieve schedule status and cancel pending changes if needed.
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Create Plans Request}]
+POST /plans
+Authorization: Bearer <admin-token>
+Content-Type: application/json
 
-\begin{lstlisting}[language=TypeScript, caption={Controller endpoints for Schedule Management}]
-@Post('get-schedule-info')
-async getScheduleInfo(@Body() dto: GetScheduleInfoDto) {
-  const schedule = await this.stripeService.getSubscriptionSchedule(
-    dto.subscriptionId
-  );
-  if (!schedule) return { hasSchedule: false };
-  
-  const nextPhase = schedule.phases[1];
-  return {
-    hasSchedule: true,
-    nextPriceId: nextPhase?.items[0]?.price,
-    startDate: nextPhase?.start_date
-  };
-}
-
-@Post('cancel-scheduled-change')
-async cancelScheduledChange(@Body() dto: CancelScheduledChangeDto) {
-  // Releases the schedule, reverting to standard subscription behavior
-  return this.stripeService.cancelScheduledChange(dto.scheduleId);
+{
+  "data": "{\"plans\": [{\"name\": \"Free\", ...}, {\"name\": \"Pro\", ...}]}"
 }
 \end{lstlisting}
 
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Endpoint} & \texttt{POST /stripe/schedule-plan-change} \\
-\hline
-\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_...", "newPriceId": "price\_..." \}} \\
-\hline
-\textbf{Response} & \texttt{\{ "scheduleId": "sub\_sched\_...", "status": "active" \}} \\
-\hline
-\end{tabular}
-\caption{API: Schedule Plan Change}
-\end{table}
-
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Endpoint} & \texttt{POST /stripe/get-schedule-info} \\
-\hline
-\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_..." \}} \\
-\hline
-\textbf{Response} & \texttt{\{ "hasSchedule": true, "nextPriceId": "price\_..." \}} \\
-\hline
-\end{tabular}
-\caption{API: Get Schedule Info}
-\end{table}
-
-\subsubsection{Webhook Processing Logic}
-
-Webhooks are central to maintaining synchronization between Stripe and our database.
-
-\noindent\textbf{Webhook Flowchart}\\
-
-Figure~\ref{fig:webhook_processing_logic} illustrates the decision logic for handling various Stripe events.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.7\textwidth]{images/webhook_processing_logic.png}
-\caption{Stripe Webhook Processing Logic}
-\label{fig:webhook_processing_logic}
-\end{figure}
-
-The \texttt{handleWebhook} method switches on \texttt{event.type}:
-\begin{itemize}
-    \item \texttt{checkout.session.completed}: Activates new subscriptions.
-    \item \texttt{subscription\_schedule.updated}: Updates local DB with \texttt{scheduledPriceId} and \texttt{scheduledPlanId}.
-    \item \texttt{subscription\_schedule.released}: Clears scheduled fields if the user cancels the pending change.
-\end{itemize}
-
-\begin{lstlisting}[language=TypeScript, caption={Stripe Webhook Handler}]
-@Post('webhook')
-async handleWebhook(@Headers('stripe-signature') signature, @Req() req) {
-  const payload = req.body as Buffer;
-  const event = await this.stripeService.handleWebhook(payload, signature);
-
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      const fullSession = await this.stripeService.getSessionWithLineItems(
-        session.id
-      );
-      // ... Processing logic
-      break;
-
-    case 'subscription_schedule.updated':
-      const schedule = event.data.object;
-      const nextPhase = schedule.phases[1];
-      if (nextPhase) {
-         // Update subscription with scheduled plan details
-         await this.subscriptionService.updateById(subId, {
-           scheduledPriceId: nextPhase.items[0].price,
-           // ...
-         });
-      }
-      break;
-
-    case 'subscription_schedule.released':
-      // Clear scheduled fields
-      break;
-  }
-  return { received: true };
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Create Plans Response}]
+{
+  "id": "plan_def456",
+  "plans": "{...}",
+  "version": 4,
+  "createdAt": "2024-01-20T14:00:00Z"
 }
 \end{lstlisting}
 
-\subsubsection{Subscription Management}
+%% ============================================================================
+%% SUBSCRIPTION MODULE
+%% ============================================================================
+\subsubsection{Subscription Module}
+\label{sec:subscription_module}
 
-\noindent\textbf{Subscription Schema}\\
+The Subscription Module tracks user subscriptions, manages quotas, monitors usage, and handles scheduled plan changes. It serves as the central source of truth for user subscription state.
 
+\paragraph{Module Structure}
 
-\begin{lstlisting}[language=TypeScript, caption={Subscription Schema (Key Fields)}]
+The Subscription Module follows a similar architecture pattern, providing dedicated endpoints for subscription management and exporting the service for use by other modules.
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Module Structure}]
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: Subscription.name, schema: SubscriptionSchema },
+    ]),
+  ],
+  controllers: [SubscriptionController],
+  providers: [SubscriptionService],
+  exports: [SubscriptionService],
+})
+export class SubscriptionModule {}
+\end{lstlisting}
+
+\paragraph{Data Model}
+
+The Subscription schema captures comprehensive subscription state including Stripe integration fields, quota management, usage tracking, and scheduled plan changes. The schema uses MongoDB's embedded document pattern for quota and usage objects.
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Schema}]
+@Schema({ timestamps: true })
 export class Subscription extends Document {
   @Prop({ required: true, ref: User.name, type: ObjectId })
   user: string | User;
 
+  // Stripe integration fields
   @Prop({ type: String }) stripeSubscriptionId?: string;
   @Prop({ type: String }) stripeCustomerId?: string;
   @Prop({ type: String }) planName?: string;
@@ -348,23 +294,31 @@ export class Subscription extends Document {
   @Prop({ type: String }) scheduledPlanName?: string;
   @Prop({ type: String }) stripeScheduleId?: string;
 
-  @Prop({ type: String, enum: ['active', 'canceled', ...], default: 'active' })
+  // Subscription status
+  @Prop({ 
+    type: String, 
+    enum: ['active', 'canceled', 'incomplete', 'incomplete_expired', 
+           'past_due', 'trialing', 'unpaid', 'paused'],
+    default: 'active' 
+  })
   status: string;
 
+  // Quota and usage tracking
   @Prop(raw({ batchDuration: Number, liveDuration: Number }))
   quota: SubscriptionUnit;
 
   @Prop(raw({ batchDuration: Number, liveDuration: Number }))
   usage: SubscriptionUnit;
 
+  // Validity period
   @Prop({ type: Date }) startDate: Date;
   @Prop({ type: Date }) endDate: Date;
 }
 \end{lstlisting}
 
-\noindent\textbf{Quota Checking}\\
+\paragraph{Quota Checking}
 
-Figure~\ref{fig:subscription_quota_check} illustrates the subscription and quota validation flow.
+Figure~\ref{fig:subscription_quota_check} illustrates the subscription and quota validation flow used before processing requests.
 
 \begin{figure}[H]
 \centering
@@ -373,172 +327,123 @@ Figure~\ref{fig:subscription_quota_check} illustrates the subscription and quota
 \label{fig:subscription_quota_check}
 \end{figure}
 
-\begin{lstlisting}[language=TypeScript, caption={Subscription Validation}]
+The quota checking logic validates user subscriptions and usage limits:
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Quota Validation}]
 async checkSubscription(userId: string, speechType?: 'live' | 'batch') {
   const sub = await this.subscriptionModel.findOne({ user: userId }).exec();
 
-  if (!sub) return { success: false, message: 'User has no subscription' };
+  if (!sub) {
+    return { success: false, message: 'User has no subscription' };
+  }
 
+  // Check batch quota (-1 means unlimited)
   if (speechType === 'batch' && sub.quota.batchDuration !== -1 &&
       sub.usage.batchDuration > sub.quota.batchDuration) {
     return { success: false, message: 'Batch quota exceeded' };
+  }
+
+  // Check live quota
+  if (speechType === 'live' && sub.quota.liveDuration !== -1 &&
+      sub.usage.liveDuration > sub.quota.liveDuration) {
+    return { success: false, message: 'Live quota exceeded' };
   }
 
   return { success: true, subscription: sub };
 }
 \end{lstlisting}
 
-\subsubsection{Stripe Price Caching}
+\paragraph{API Endpoints}
 
-Figure~\ref{fig:stripe_price_caching} shows the price caching mechanism with cache penetration protection.
+Table~\ref{tab:subscription_endpoints} provides a complete list of Subscription module endpoints.
 
-\begin{figure}[H]
+\begin{table}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{images/stripe_price_caching.png}
-\caption{Stripe Price Caching with Penetration Protection}
-\label{fig:stripe_price_caching}
-\end{figure}
+\caption{Subscription Module API Endpoints}
+\label{tab:subscription_endpoints}
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+GET & /subscriptions/user/:id & Admin & Get user subscription \\
+\hline
+PUT & /subscriptions/user/:id & Admin & Update user subscription \\
+\hline
+\end{tabular}
+\end{table}
 
-\begin{lstlisting}[language=TypeScript, caption={Stripe Price Caching}]
-async getPrice(priceId: string): Promise<Stripe.Price> {
-  const cacheKey = `stripe:price:${priceId}`;
-  const cached = await this.redisClient.get(cacheKey);
+\subparagraph{Get User Subscription (Admin)}
 
-  if (cached) {
-    if (cached === 'NULL') throw new Error('Price not found (cached)');
-    return JSON.parse(cached) as Stripe.Price;
-  }
+Retrieves subscription details for a specific user.
 
-  try {
-    const price = await this.stripe.prices.retrieve(priceId);
-    await this.redisClient.set(cacheKey, JSON.stringify(price), {
-      EX: this.CACHE_TTL, // 24 hours
-    });
-    return price;
-  } catch (error) {
-    if (error?.code === 'resource_missing') {
-      await this.redisClient.set(cacheKey, 'NULL', { EX: 60 });
-    }
-    throw error;
-  }
-}
-\subsubsection{Subscription Lifecycle Management}
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Get User Subscription Request}]
+GET /subscriptions/user/6507a1b2c3d4e5f6a7b8c9d0
+Authorization: Bearer <admin-token>
+\end{lstlisting}
 
-Beyond scheduling changes, the system provides full lifecycle management allowing users to cancel and resume their subscriptions.
-
-\noindent\textbf{Cancellation and Resumption Flow}\\
-
-Users can cancel their subscription, which sets the `cancel_at_period_end` flag in Stripe. This keeps the subscription active until the end of the billing cycle. If they change their mind, they can resume it before the cycle ends.
-
-\begin{lstlisting}[language=TypeScript, caption={Subscription Cancellation and Resumption}]
-@UseGuards(JwtAuthGuard)
-@Post('cancel-subscription')
-async cancelSubscription(@Body() dto: CancelSubscriptionDto, @Req() req) {
-  // Calls Stripe to update subscription with cancel_at_period_end = true
-  return this.stripeService.cancelSubscription(dto.subscriptionId);
-}
-
-@Post('resume-subscription')
-async resumeSubscription(@Body() dto: ResumeSubscriptionDto) {
-  // Reverts cancellation by setting cancel_at_period_end = false
-  return this.stripeService.resumeSubscription(dto.subscriptionId);
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Get User Subscription Response}]
+{
+  "_id": "sub_123456",
+  "user": "6507a1b2c3d4e5f6a7b8c9d0",
+  "status": "active",
+  "planName": "Pro",
+  "quota": {
+    "batchDuration": 3600,
+    "liveDuration": 1800
+  },
+  "usage": {
+    "batchDuration": 1200,
+    "liveDuration": 600
+  },
+  "startDate": "2024-01-01T00:00:00Z",
+  "endDate": "2024-12-31T23:59:59Z"
 }
 \end{lstlisting}
 
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Endpoint} & \texttt{POST /stripe/cancel-subscription} \\
-\hline
-\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_..." \}} \\
-\hline
-\textbf{Response} & \texttt{\{ "status": "active", "cancelAtPeriodEnd": true \}} \\
-\hline
-\end{tabular}
-\caption{API: Cancel Subscription}
-\end{table}
+\subparagraph{Update User Subscription (Admin)}
 
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Endpoint} & \texttt{POST /stripe/resume-subscription} \\
-\hline
-\textbf{Request} & \texttt{\{ "subscriptionId": "sub\_..." \}} \\
-\hline
-\textbf{Response} & \texttt{\{ "status": "active", "cancelAtPeriodEnd": false \}} \\
-\hline
-\end{tabular}
-\caption{API: Resume Subscription}
-\end{table}
+Allows administrators to manually update subscription quotas or extend validity periods.
 
-\subsubsection{Administrative Operations}
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Update User Subscription Request}]
+PUT /subscriptions/user/6507a1b2c3d4e5f6a7b8c9d0
+Authorization: Bearer <admin-token>
+Content-Type: application/json
 
-To support operations, the system includes secured endpoints for administrators to manage plans and user subscriptions.
-
-\noindent\textbf{Plan Management}\\
-
-Administrators can publish new plan versions. The system automatically handles version incrementing and invalidates the Redis cache.
-
-\begin{lstlisting}[language=TypeScript, caption={Admin Plan Creation}]
-@Roles(Role.Admin)
-@Post()
-async create(@Body() dto: CreatePlansDto) {
-  // Validates structure and creates new versioned plan document
-  const result = await this.planService.create(dto.data);
-  return result;
+{
+  "endDate": "2025-12-31",
+  "batchDuration": 7200,
+  "liveDuration": 3600
 }
 \end{lstlisting}
 
-\noindent\textbf{User Subscription Administration}\\
-
-Admins can manually intervene to update subscription quotas or extend validity periods for specific users.
-
-\begin{lstlisting}[language=TypeScript, caption={Admin Subscription Update}]
-@Roles(Role.Admin)
-@Put('/user/:id')
-async updateSubscriptionByUser(@Body() body: UpdateSubscriptionByUserDto, @Param() params) {
-  // Manually update quota or end date
-  return this.subscriptionService.updateByUser(params.id, {
-    endDate: new Date(body.endDate),
-    'quota.batchDuration': body.batchDuration,
-    'quota.liveDuration': body.liveDuration,
-  }, true);
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Update User Subscription Response}]
+{
+  "_id": "sub_123456",
+  "user": "6507a1b2c3d4e5f6a7b8c9d0",
+  "quota": {
+    "batchDuration": 7200,
+    "liveDuration": 3600
+  },
+  "endDate": "2025-12-31T23:59:59Z"
 }
 \end{lstlisting}
 
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Endpoint} & \texttt{POST /plans} (Admin) \\
-\hline
-\textbf{Request} & \texttt{\{ "data": "\{\textbackslash"plans\textbackslash": [...]\}" \}} \\
-\hline
-\textbf{Response} & \texttt{\{ "plans": "...", "version": 5 \}} \\
-\hline
-\end{tabular}
-\caption{API: Create Plans}
-\end{table}
+%% ============================================================================
+%% STRIPE MODULE
+%% ============================================================================
+\subsubsection{Stripe Module}
+\label{sec:stripe_module}
 
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Endpoint} & \texttt{PUT /subscriptions/user/:id} (Admin) \\
-\hline
-\textbf{Request} & \texttt{\{ "endDate": "2024-12-31", ... \}} \\
-\hline
-\textbf{Response} & \texttt{\{ "\_id": "...", "quota": \{...\}, "endDate": "..." \}} \\
-\hline
-\end{tabular}
-\caption{API: Update User Subscription}
-\end{table}
+The Stripe Module handles all payment-related operations including checkout sessions, subscription lifecycle management, plan scheduling, and webhook processing. It integrates with both the Plan and Subscription modules.
 
-\subsubsection{Module Dependencies}
+\paragraph{Module Structure}
 
-The Stripe module integrates with Subscription and Plan modules:
+The Stripe Module imports both Subscription and Plan schemas to manage cross-module operations. It configures the Stripe SDK through a dedicated configuration module and provides services for all payment-related functionality.
+
 \begin{lstlisting}[language=TypeScript, caption={Stripe Module Configuration}]
 @Module({
   imports: [
@@ -553,4 +458,456 @@ The Stripe module integrates with Subscription and Plan modules:
   exports: [StripeService],
 })
 export class StripeModule {}
+\end{lstlisting}
+
+\paragraph{Checkout Flow}
+
+Figure~\ref{fig:stripe_checkout_flow} shows the complete Stripe Checkout flow from user request to subscription creation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/stripe_checkout_flow.png}
+\caption{Stripe Checkout Session Flow}
+\label{fig:stripe_checkout_flow}
+\end{figure}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:stripe_endpoints} provides a complete list of Stripe module endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Stripe Module API Endpoints}
+\label{tab:stripe_endpoints}
+\begin{tabular}{|l|l|l|p{4.5cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+POST & /stripe/stripe-checkout-session & JWT & Create checkout session \\
+\hline
+POST & /stripe/check-subscription-status & JWT & Check subscription status \\
+\hline
+POST & /stripe/cancel-subscription & JWT & Cancel subscription \\
+\hline
+POST & /stripe/resume-subscription & JWT & Resume cancelled subscription \\
+\hline
+POST & /stripe/get-price & None & Get price information \\
+\hline
+POST & /stripe/schedule-plan-change & JWT & Schedule plan change \\
+\hline
+POST & /stripe/get-schedule-info & JWT & Get schedule info \\
+\hline
+POST & /stripe/cancel-scheduled-change & JWT & Cancel scheduled change \\
+\hline
+POST & /stripe/webhook & Stripe & Handle Stripe webhooks \\
+\hline
+\end{tabular}
+\end{table}
+
+\subparagraph{Create Checkout Session}
+
+Creates a Stripe Checkout session for subscription purchase. User metadata is attached for webhook processing.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Create Checkout Session Request}]
+POST /stripe/stripe-checkout-session
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "priceId": "price_1234567890"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Create Checkout Session Response}]
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "sessionId": "cs_test_a1b2c3d4e5f6"
+}
+\end{lstlisting}
+
+\subparagraph{Check Subscription Status}
+
+Retrieves detailed subscription status including cancellation information.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Check Subscription Status Request}]
+POST /stripe/check-subscription-status
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "subscriptionId": "sub_1234567890"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Check Subscription Status Response}]
+{
+  "subscriptionId": "sub_1234567890",
+  "status": "active",
+  "isCancelled": false,
+  "canceledAt": null,
+  "cancelAtPeriodEnd": false,
+  "currentPeriodEnd": 1704067199
+}
+\end{lstlisting}
+
+\subparagraph{Cancel Subscription}
+
+Cancels a subscription at the end of the current billing period.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Cancel Subscription Request}]
+POST /stripe/cancel-subscription
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "subscriptionId": "sub_1234567890"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Cancel Subscription Response}]
+{
+  "subscriptionId": "sub_1234567890",
+  "status": "active",
+  "cancelAt": 1704067199,
+  "cancelAtPeriodEnd": true,
+  "message": "Subscription will be cancelled at the end of the current billing period"
+}
+\end{lstlisting}
+
+\subparagraph{Resume Subscription}
+
+Reverts a pending cancellation, keeping the subscription active.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Resume Subscription Request}]
+POST /stripe/resume-subscription
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "subscriptionId": "sub_1234567890"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Resume Subscription Response}]
+{
+  "subscriptionId": "sub_1234567890",
+  "status": "active",
+  "cancelAt": null,
+  "cancelAtPeriodEnd": false
+}
+\end{lstlisting}
+
+\subparagraph{Get Price Information}
+
+Retrieves Stripe price details with Redis caching.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Get Price Request}]
+POST /stripe/get-price
+Content-Type: application/json
+
+{
+  "price_id": "price_1234567890"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Get Price Response}]
+{
+  "id": "price_1234567890",
+  "currency": "usd",
+  "unit_amount": 1999,
+  "recurring": {
+    "interval": "month",
+    "interval_count": 1
+  }
+}
+\end{lstlisting}
+
+\paragraph{Subscription Scheduling}
+
+To support plan upgrades and downgrades without immediate billing impact, the system implements a scheduling mechanism using Stripe Subscription Schedules.
+
+\subparagraph{Scheduling Flow}
+
+Figure~\ref{fig:subscription_scheduling_flow} details the sequence for scheduling a plan change.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/subscription_scheduling_flow.png}
+\caption{Subscription Plan Change Scheduling Sequence}
+\label{fig:subscription_scheduling_flow}
+\end{figure}
+
+The scheduling process follows these steps:
+\begin{enumerate}
+    \item Retrieves current subscription details to identify the \texttt{current\_period\_end}.
+    \item Checks for any existing subscription schedules to prevent conflicts.
+    \item If a schedule exists, updates the subsequent phase with the new price.
+    \item If no schedule exists, creates a new one from the current subscription.
+\end{enumerate}
+
+\subparagraph{Advanced Scheduling Logic}
+
+The implementation handles complex scenarios such as modifying an already scheduled change:
+
+\begin{lstlisting}[language=TypeScript, caption={Smart Scheduling Logic in StripeService}, label={lst:schedule_logic}]
+async schedulePlanChange(subscriptionId: string, newPriceId: string) {
+  // 1. Get current subscription
+  const subscription = await this.stripe.subscriptions.retrieve(
+    subscriptionId, { expand: ['items'] }
+  );
+
+  // 2. Check for existing schedules
+  const schedules = await this.stripe.subscriptionSchedules.list({
+    customer: subscription.customer as string,
+  });
+  const activeSchedule = schedules.data.find(s => 
+    s.subscription === subscriptionId && 
+    (s.status === 'active' || s.status === 'not_started')
+  );
+
+  if (activeSchedule) {
+    // 3a. Update existing schedule
+    const currentPhase = activeSchedule.phases[0];
+    return this.stripe.subscriptionSchedules.update(activeSchedule.id, {
+      phases: [
+        { ...currentPhase },
+        { items: [{ price: newPriceId, quantity: 1 }] }
+      ]
+    });
+  }
+
+  // 3b. Create new schedule from subscription
+  const schedule = await this.stripe.subscriptionSchedules.create({
+    from_subscription: subscriptionId,
+  });
+  
+  return this.stripe.subscriptionSchedules.update(schedule.id, {
+    phases: [
+      { ...schedule.phases[0] },
+      { items: [{ price: newPriceId, quantity: 1 }] }
+    ]
+  });
+}
+\end{lstlisting}
+
+\subparagraph{Schedule Plan Change}
+
+Schedules a plan change to take effect at the next billing period.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Schedule Plan Change Request}]
+POST /stripe/schedule-plan-change
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "subscriptionId": "sub_1234567890",
+  "newPriceId": "price_pro_monthly"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Schedule Plan Change Response}]
+{
+  "scheduleId": "sub_sched_abc123",
+  "subscriptionId": "sub_1234567890",
+  "status": "active",
+  "currentPhaseEnd": 1704067199,
+  "nextPriceId": "price_pro_monthly",
+  "message": "Plan change scheduled for next billing period"
+}
+\end{lstlisting}
+
+\subparagraph{Get Schedule Info}
+
+Retrieves information about a pending scheduled plan change.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Get Schedule Info Request}]
+POST /stripe/get-schedule-info
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "subscriptionId": "sub_1234567890"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Get Schedule Info Response}]
+{
+  "hasSchedule": true,
+  "scheduleId": "sub_sched_abc123",
+  "status": "active",
+  "currentPhaseEnd": 1704067199,
+  "nextPriceId": "price_pro_monthly"
+}
+\end{lstlisting}
+
+\subparagraph{Cancel Scheduled Change}
+
+Cancels a pending scheduled plan change.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Cancel Scheduled Change Request}]
+POST /stripe/cancel-scheduled-change
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "scheduleId": "sub_sched_abc123"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Cancel Scheduled Change Response}]
+{
+  "scheduleId": "sub_sched_abc123",
+  "status": "released",
+  "message": "Scheduled plan change cancelled successfully"
+}
+\end{lstlisting}
+
+\paragraph{Webhook Processing}
+
+Webhooks are central to maintaining synchronization between Stripe and the local database.
+
+\subparagraph{Webhook Flowchart}
+
+Figure~\ref{fig:webhook_processing_logic} illustrates the decision logic for handling various Stripe events.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/webhook_processing_logic.png}
+\caption{Stripe Webhook Processing Logic}
+\label{fig:webhook_processing_logic}
+\end{figure}
+
+The webhook handler processes the following event types:
+\begin{itemize}
+    \item \texttt{checkout.session.completed}: Activates new subscriptions
+    \item \texttt{subscription\_schedule.updated}: Updates local DB with scheduled plan details
+    \item \texttt{subscription\_schedule.released}: Clears scheduled fields when changes are cancelled
+\end{itemize}
+
+\subparagraph{Webhook Endpoint}
+
+Receives and processes Stripe webhook events.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Stripe Webhook Request}]
+POST /stripe/webhook
+stripe-signature: t=1234567890,v1=abc123...
+Content-Type: application/json
+
+{
+  "id": "evt_1234567890",
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_test_abc123",
+      "customer": "cus_abc123",
+      "subscription": "sub_abc123"
+    }
+  }
+}
+\end{lstlisting}
+
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Stripe Webhook Response}]
+{
+  "received": true
+}
+\end{lstlisting}
+
+\subparagraph{Webhook Handler Implementation}
+
+The webhook handler implementation processes different event types:
+
+\begin{lstlisting}[language=TypeScript, caption={Stripe Webhook Handler}]
+@Post('webhook')
+async handleWebhook(
+  @Headers('stripe-signature') signature: string, 
+  @Req() req: Request
+) {
+  const payload = req.body as Buffer;
+  const event = await this.stripeService.handleWebhook(payload, signature);
+
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      const fullSession = await this.stripeService.getSessionWithLineItems(
+        session.id
+      );
+      // Create subscription record with plan details
+      break;
+
+    case 'subscription_schedule.updated':
+      const schedule = event.data.object;
+      const nextPhase = schedule.phases[1];
+      if (nextPhase) {
+        await this.subscriptionService.updateById(subId, {
+          scheduledPriceId: nextPhase.items[0].price,
+          scheduledPlanId: nextPhase.plan,
+        });
+      }
+      break;
+
+    case 'subscription_schedule.released':
+      // Clear scheduled fields
+      await this.subscriptionService.updateById(subscription._id, {
+        scheduledPriceId: null,
+        scheduledPlanId: null,
+        stripeScheduleId: null,
+      });
+      break;
+  }
+  return { received: true };
+}
+\end{lstlisting}
+
+\paragraph{Price Caching}
+
+Figure~\ref{fig:stripe_price_caching} shows the price caching mechanism with cache penetration protection.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{images/stripe_price_caching.png}
+\caption{Stripe Price Caching with Penetration Protection}
+\label{fig:stripe_price_caching}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, caption={Stripe Price Caching Implementation}]
+async getPrice(priceId: string): Promise<Stripe.Price> {
+  const cacheKey = `stripe:price:${priceId}`;
+  const cached = await this.redisClient.get(cacheKey);
+
+  if (cached) {
+    if (cached === 'NULL') throw new Error('Price not found (cached)');
+    return JSON.parse(cached) as Stripe.Price;
+  }
+
+  try {
+    const price = await this.stripe.prices.retrieve(priceId);
+    await this.redisClient.set(cacheKey, JSON.stringify(price), {
+      EX: 86400, // 24 hours
+    });
+    return price;
+  } catch (error) {
+    if (error?.code === 'resource_missing') {
+      await this.redisClient.set(cacheKey, 'NULL', { EX: 60 });
+    }
+    throw error;
+  }
+}
 \end{lstlisting}

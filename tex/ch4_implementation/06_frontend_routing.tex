@@ -1,17 +1,19 @@
 \subsection{Routing and Navigation}
 \label{sec:frontend_routing}
 
-Vue Router manages navigation with guards that enforce authentication and role-based access control.
+Vue Router 4 manages navigation with global navigation guards that enforce authentication and role-based access control. The routing system uses the Composition API pattern with dependency injection for state management.
 
 \subsubsection{Route Configuration}
 
-Routes are categorized by authentication requirements:
+Routes are defined with meta fields that specify authentication and authorization requirements:
 
 \begin{table}[H]
 \centering
 \begin{tabular}{|l|c|c|l|}
 \hline
 \textbf{Path} & \textbf{Auth} & \textbf{Admin} & \textbf{Component} \\
+\hline
+/ & Yes & Yes & Dashboard.vue \\
 \hline
 /sign-in & No & No & SignIn.vue \\
 \hline
@@ -25,17 +27,25 @@ Routes are categorized by authentication requirements:
 \hline
 /speeches & Yes & No & Speeches.vue \\
 \hline
+/speeches/:speechId & Yes & No & SpeechDetail.vue \\
+\hline
 /files & Yes & No & Files.vue \\
+\hline
+/files/:fileId & Yes & No & FileDetail.vue \\
 \hline
 /applications & Yes & No & Applications.vue \\
 \hline
-/subscription & Yes & No & Subscription.vue \\
+/applications/:appId & Yes & No & ApplicationDetail.vue \\
 \hline
-/dashboard & Yes & Yes & Dashboard.vue \\
+/subscription & Yes & No & Subscription.vue \\
 \hline
 /users & Yes & Yes & Users.vue \\
 \hline
+/users/:userId & Yes & Yes & UserDetail.vue \\
+\hline
 /request-log & Yes & Yes & RequestLog.vue \\
+\hline
+/request-log/:reqId & Yes & Yes & RequestLogDetail.vue \\
 \hline
 /settings & Yes & Yes & Settings.vue \\
 \hline
@@ -43,6 +53,68 @@ Routes are categorized by authentication requirements:
 \caption{Route Definitions}
 \label{tab:route_definitions}
 \end{table}
+
+\paragraph{Router Instance}
+
+The router is created with Vue Router 4 syntax using \texttt{createRouter} and \texttt{createWebHistory}:
+
+\begin{lstlisting}[language=JavaScript, caption={Router Configuration}]
+import { createRouter, createWebHistory } from 'vue-router'
+import { ensureSession, ensureSignedIn } from './hooks'
+
+const routes = [
+  {
+    path: '/',
+    name: 'Dashboard',
+    component: () => import('@/views/dashboard/Dashboard.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true
+    }
+  },
+  {
+    path: '/speeches',
+    name: 'Speeches',
+    component: () => import('@/views/Speeches.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/subscription',
+    name: 'Subscription',
+    component: () => import('@/views/Subscription.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/sign-in',
+    name: 'SignIn',
+    component: () => import('@/views/SignIn.vue'),
+    meta: {
+      requiresAuth: false
+    }
+  },
+  // Vue Router 4 catch-all syntax
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    redirect: '/'
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes
+})
+
+// Global navigation guards
+router.beforeEach(ensureSession)
+router.beforeEach(ensureSignedIn)
+
+export default router
+\end{lstlisting}
 
 \subsubsection{Navigation Guards Flow}
 
@@ -57,43 +129,100 @@ Figure~\ref{fig:frontend_navigation_guards} illustrates the navigation guard log
 
 \subsubsection{Guard Implementation}
 
-Two navigation guards work together:
+The navigation guards use dependency injection to access global state and methods. Dependencies are set during app initialization in \texttt{main.js}.
 
-\noindent\textbf{Session Guard}
+\paragraph{Dependency Injection Pattern}
 
-Ensures user data is loaded before navigation:
+Guards receive dependencies from the main app:
 
-\begin{lstlisting}[language=TypeScript, caption={Session Guard}]
-export const ensureSession = router => async (to, from, next) => {
-  await Vue.nextTick()
-  
-  if (!router.app.user && to.name !== 'SignIn') {
-    const user = await router.app.getCurrentUser()
-    to.meta.isSignedIn = !!user
-  } else {
-    to.meta.isSignedIn = router.app.user !== null
+\begin{lstlisting}[language=JavaScript, caption={Setting Router Dependencies}]
+// In main.js
+import { setRouterDependencies } from './router/hooks'
+
+const globalState = createGlobalState()
+const globalMethods = { getCurrentUser, logout, ... }
+
+// Inject dependencies into router hooks
+setRouterDependencies(globalState, globalMethods)
+\end{lstlisting}
+
+\paragraph{Session Guard}
+
+The \texttt{ensureSession} guard loads user data before navigation:
+
+\begin{lstlisting}[language=JavaScript, caption={Session Guard Implementation}]
+import { nextTick } from 'vue'
+
+let globalState = null
+let globalMethods = null
+
+export function setRouterDependencies(state, methods) {
+  globalState = state
+  globalMethods = methods
+}
+
+export const ensureSession = async (to, from, next) => {
+  await nextTick()
+
+  if (!globalState || !globalMethods) {
+    next()
+    return
   }
-  next()
+
+  if (!globalState.user && to.name !== 'SignIn') {
+    // Load user data from JWT
+    const user = await globalMethods.getCurrentUser()
+    if (user) {
+      to.meta.isSignedIn = true
+      next()
+    } else {
+      to.meta.isSignedIn = false
+      next()
+    }
+  } else {
+    to.meta.isSignedIn = globalState.user !== null
+    next()
+  }
 }
 \end{lstlisting}
 
-\noindent\textbf{Auth Guard}
+\paragraph{Authentication Guard}
 
-Enforces authentication and admin requirements:
+The \texttt{ensureSignedIn} guard enforces authentication and role requirements:
 
-\begin{lstlisting}[language=TypeScript, caption={Auth Guard}]
-export const ensureSignedIn = router => (to, from, next) => {
+\begin{lstlisting}[language=JavaScript, caption={Auth Guard Implementation}]
+function anyTrue(to, prop) {
+  return to.matched.findIndex(item => item.meta[prop]) !== -1
+}
+
+export const ensureSignedIn = (to, from, next) => {
+  if (!globalState) {
+    next()
+    return
+  }
+
   const requiresAdmin = anyTrue(to, 'requiresAdmin')
-  const requiresAuth = requiresAdmin || anyTrue(to, 'requiresAuth')
-  
+  const requiresAuth = requiresAdmin ? true : anyTrue(to, 'requiresAuth')
+
   if (requiresAuth) {
-    if (!to.meta.isSignedIn) {
-      next({ name: 'SignIn' })
-    } else if (requiresAdmin && 
-               router.app.user.role !== 'admin') {
-      next({ name: 'Speeches' })
+    const { isSignedIn } = to.meta
+
+    if (isSignedIn) {
+      if (requiresAdmin) {
+        const isAdmin = globalState.user?.role === 'admin'
+
+        if (isAdmin) {
+          next()
+        } else {
+          // Redirect non-admin users to Speeches page
+          next({ name: 'Speeches' })
+        }
+      } else {
+        next()
+      }
     } else {
-      next()
+      // Redirect unauthenticated users to sign-in
+      next({ name: 'SignIn' })
     }
   } else {
     next()
@@ -112,9 +241,143 @@ Figure~\ref{fig:frontend_http_interceptor} shows the HTTP interceptor flow for a
 \label{fig:frontend_http_interceptor}
 \end{figure}
 
-The interceptors handle:
+\paragraph{Axios Instance Configuration}
+
+The Axios instance is configured with base URL and default headers:
+
+\begin{lstlisting}[language=JavaScript, caption={Axios HTTP Client Setup}]
+import axios from 'axios'
+import router from './router'
+import authService from './services/auth.service'
+
+const baseURL = import.meta.env.VITE_GATEWAY_URL
+
+const http = axios.create({
+  baseURL,
+  headers: {
+    Authorization: `Bearer ${authService.getAccessToken()}`,
+    'Content-Type': 'application/json'
+  }
+})
+
+// Global state reference (set from main.js)
+let globalState = null
+let globalMethods = null
+
+export function setGlobalState(state, methods) {
+  globalState = state
+  globalMethods = methods
+}
+\end{lstlisting}
+
+\paragraph{Request Interceptor}
+
+Automatically attaches fresh JWT token to every request:
+
+\begin{lstlisting}[language=JavaScript, caption={Request Interceptor}]
+http.interceptors.request.use((config) => {
+  const token = authService.getAccessToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+}, (error) => {
+  return Promise.reject(error)
+})
+\end{lstlisting}
+
+\paragraph{Response Interceptor}
+
+Handles 401 errors with automatic token refresh:
+
+\begin{lstlisting}[language=JavaScript, caption={Response Interceptor with Token Refresh}]
+http.interceptors.response.use((response) => {
+  return response
+}, async (error) => {
+  const originalRequest = error.config
+
+  if (error.response) {
+    if (error.response.status === 401 && 
+        router.currentRoute.value.name !== 'SignIn') {
+      
+      // Try to refresh token (only once per request)
+      if (!originalRequest._retry) {
+        originalRequest._retry = true
+
+        try {
+          const token = authService.getAccessToken()
+          if (token) {
+            const refreshResult = await authService.refreshToken({ token })
+            
+            authService.storeAuthData(
+              refreshResult.accessToken,
+              refreshResult.subscriptionEnd,
+              refreshResult.isVerified
+            )
+
+            // Retry original request with new token
+            originalRequest.headers.Authorization = 
+              `Bearer ${refreshResult.accessToken}`
+            return http(originalRequest)
+          }
+        } catch (refreshError) {
+          // Refresh failed, logout user
+          if (globalState) {
+            globalState.snackbar.message = 
+              'Session expired. Please login again.'
+            globalState.snackbar.isVisible = true
+            globalState.snackbar.color = 'error'
+          }
+          authService.clearAuthData()
+          router.push({ name: 'SignIn' })
+          return Promise.reject(refreshError)
+        }
+      }
+
+      // If retry failed
+      if (globalState) {
+        globalState.snackbar.message = 
+          error.response.data.message || 'Authentication failed'
+        globalState.snackbar.isVisible = true
+        globalState.snackbar.color = 'error'
+      }
+      authService.clearAuthData()
+      router.push({ name: 'SignIn' })
+      return Promise.reject(error)
+    }
+
+    // Handle error messages
+    if (Array.isArray(error.response.data.message)) {
+      if (globalState) {
+        globalState.snackbar.message = error.response.data.message[0]
+      }
+    } else {
+      if (globalState) {
+        globalState.snackbar.message = error.response.data.message
+      }
+    }
+  } else {
+    if (globalState) {
+      globalState.snackbar.message = error.message
+    }
+  }
+
+  if (globalState) {
+    globalState.snackbar.isVisible = true
+    globalState.snackbar.color = 'error'
+  }
+
+  return Promise.reject(error)
+})
+
+export default http
+\end{lstlisting}
+
+The interceptors provide:
 \begin{itemize}
-    \item \textbf{Request}: Automatically attach Authorization header with JWT token.
-    \item \textbf{Response 401}: Attempt token refresh; if failed, redirect to login.
-    \item \textbf{Other Errors}: Display error message in snackbar.
+    \item \textbf{Automatic Token Injection}: Attaches Bearer token to Authorization header
+    \item \textbf{Token Refresh on 401}: Attempts to refresh expired tokens transparently
+    \item \textbf{Retry Mechanism}: Retries original request after successful refresh
+    \item \textbf{Error Handling}: Displays user-friendly error messages in snackbar
+    \item \textbf{Session Management}: Redirects to sign-in when refresh fails
 \end{itemize}

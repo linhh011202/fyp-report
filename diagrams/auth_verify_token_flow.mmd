@@ -1,0 +1,47 @@
+sequenceDiagram
+    participant Client
+    participant Controller as AuthController
+    participant Service as AuthService
+    participant JWT as JwtService
+    participant TB as TokenBlacklist
+    participant UT as UserTokens
+    participant UserSvc as UserService
+    participant DB as MongoDB
+
+    Client->>Controller: POST /auth/verify-token
+    Note over Client,Controller: Body: {token: "jwt_string"}
+    
+    Controller->>Service: verifyAccessToken(token)
+    
+    Service->>JWT: decode(token)
+    alt Invalid token format
+        JWT-->>Service: null
+        Service-->>Client: {valid: false, expired: false, message: "Invalid token format"}
+    end
+    JWT-->>Service: {sub, email, role, name, type, exp, aud}
+    
+    Service->>TB: findOne({token})
+    alt Token blacklisted
+        TB-->>Service: Found
+        Service-->>Client: {valid: false, expired: false, message: "Token has been revoked"}
+    end
+    TB-->>Service: Not found
+    
+    Service->>JWT: verifyAsync(token)
+    alt Token expired
+        JWT-->>Service: TokenExpiredError
+        Service-->>Client: {valid: false, expired: true, message: "Token has expired"}
+    else Invalid signature
+        JWT-->>Service: JsonWebTokenError
+        Service-->>Client: {valid: false, expired: false, message: "Invalid token signature"}
+    end
+    JWT-->>Service: Valid
+    
+    Service->>UserSvc: findById(decoded.sub)
+    alt User not found
+        UserSvc-->>Service: null
+        Service-->>Client: {valid: false, message: "User not found"}
+    end
+    UserSvc-->>Service: User document
+    
+    Service-->>Client: {valid: true, expired: false, user: {...}, expiresAt}

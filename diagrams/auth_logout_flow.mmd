@@ -1,0 +1,31 @@
+sequenceDiagram
+    participant Client
+    participant Controller as AuthController
+    participant Guard as JwtAuthGuard
+    participant Service as AuthService
+    participant JWT as JwtService
+    participant TB as TokenBlacklist
+    participant UT as UserTokens
+
+    Client->>Controller: POST /auth/logout
+    Note over Client,Controller: Header: Authorization: Bearer <token>
+    
+    Controller->>Guard: Validate JWT
+    Guard->>JWT: verify(token)
+    JWT-->>Guard: Decoded payload
+    Guard-->>Controller: req.user populated
+    
+    Controller->>Controller: Extract token from header
+    Controller->>Service: logout(token, userId)
+    
+    Service->>JWT: decode(token)
+    JWT-->>Service: {exp, ...}
+    
+    Service->>TB: create({token, userId, reason: 'logout', expiresAt})
+    Note over TB: Token added to blacklist
+    
+    Service->>UT: deleteOne({token})
+    Note over UT: Token removed from active list
+    
+    Service-->>Controller: void
+    Controller-->>Client: 200 {message: "Logged out successfully"}

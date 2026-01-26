@@ -1,0 +1,39 @@
+flowchart LR
+    subgraph AuthModule["Auth Module Endpoints"]
+        direction TB
+        L[POST /auth/login]
+        R[POST /auth/register]
+        SSO[POST /auth/login-sso]
+        AI[POST /auth/add-info]
+        GR[POST /auth/google-register]
+        V[POST /auth/verify]
+        VE[GET /auth/verify]
+        RV[GET /auth/reverify]
+        CP[POST /auth/change-password]
+        FP[POST /auth/forgot-password]
+        RP[POST /auth/reset-password]
+        VT[POST /auth/verify-token]
+        LO[POST /auth/logout]
+        RT[POST /auth/refresh-token]
+    end
+
+    subgraph GoogleSSO["Google SSO Endpoints"]
+        GL[GET /auth/google/login]
+        GC[GET /auth/google/callback]
+    end
+
+    subgraph AppleSSO["Apple SSO Endpoints"]
+        AC[POST /auth/apple/callback]
+    end
+
+    subgraph Guards["Authentication Guards"]
+        LAG[LocalAuthGuard]
+        JAG[JwtAuthGuard]
+        GAG[GoogleAuthGuard]
+    end
+
+    L --> LAG
+    LO --> JAG
+    V --> JAG
+    GL --> GAG
+    GC --> GAG

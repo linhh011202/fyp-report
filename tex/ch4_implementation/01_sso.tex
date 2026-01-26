@@ -1,44 +1,518 @@
-\subsection{SSO Implementation}%
-\label{sec:sso}
+\subsection{Authentication and SSO Implementation}%
+\label{sec:authentication_and_sso}
 
-This subsection provides a comprehensive examination of the authentication system implemented in the Gateway Dashboard. It covers the supported authentication methods, detailed flow descriptions, and key implementation details.
+This section provides a comprehensive examination of the authentication system implemented in the Gateway Dashboard. The system is organized into three distinct modules matching the backend architecture:
 
-\subsubsection{Overview}
-
-The Gateway Dashboard supports three authentication methods:
 \begin{itemize}
-    \item \textbf{Google OAuth 2.0}: Full OAuth flow with Passport.js strategy
-    \item \textbf{Apple Sign-In}: POST callback with JWT token verification
-    \item \textbf{Traditional Email/Password}: bcrypt-hashed credentials
+    \item \textbf{Auth Module}: Core authentication with traditional email/password, token management, and shared services
+    \item \textbf{Google SSO Module}: OAuth 2.0 flow with Passport.js strategy
+    \item \textbf{Apple SSO Module}: POST callback with JWT token verification
 \end{itemize}
 
-Figure~\ref{fig:sso_architecture} illustrates the SSO architecture showing how both providers integrate with the AuthService.
+Figure~\ref{fig:sso_architecture} illustrates the overall architecture showing how all authentication modules integrate.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{images/sso_architecture.png}
-\caption{SSO Authentication Architecture}
+\caption{Authentication System Architecture Overview}
 \label{fig:sso_architecture}
 \end{figure}
 
-Both SSO providers share a common flow: after identity verification, the system checks if the user exists. For new users, a temporary token is generated requiring password setup; for existing users, an access token is issued directly.
+%----------------------------------------------------------------------
+\subsubsection{Auth Module}%
+\label{sec:auth_module}
+The Auth Module (\texttt{auth/}) serves as the core authentication component, providing traditional email/password authentication, token management, and shared services used by SSO modules.
 
-\subsubsection{Google OAuth 2.0 Implementation}
+\paragraph{Module Architecture}
 
-Google SSO uses the \texttt{passport-google-oauth20} strategy integrated with NestJS guards.
+Figure~\ref{fig:auth_module_architecture} shows the Auth module's internal structure.
 
-\noindent\textbf{Google OAuth Flow}\\
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/auth_module_architecture.png}
+\caption{Auth Module Architecture}
+\label{fig:auth_module_architecture}
+\end{figure}
+
+The module consists of:
+\begin{itemize}
+    \item \texttt{AuthController}: Handles all \texttt{/auth/*} HTTP endpoints
+    \item \texttt{AuthService}: Business logic for authentication, token management, and user verification
+    \item \texttt{LocalAuthGuard} \& \texttt{LocalStrategy}: Passport.js strategy for email/password authentication
+    \item \texttt{JwtStrategy}: JWT token validation strategy
+    \item \texttt{TokenBlacklist} \& \texttt{UserTokens}: MongoDB schemas for session management
+\end{itemize}
+
+\paragraph{API Endpoints}
+
+Figure~\ref{fig:auth_api_endpoints} provides an overview of all Auth module endpoints.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/auth_api_endpoints.png}
+\caption{Auth Module API Endpoints Overview}
+\label{fig:auth_api_endpoints}
+\end{figure}
+
+Table~\ref{tab:auth_endpoints} provides a complete list of Auth module endpoints with their descriptions.
+
+\begin{table}[H]
+\centering
+\caption{Auth Module API Endpoints}
+\label{tab:auth_endpoints}
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+POST & /auth/login & None & Traditional email/password login \\
+\hline
+POST & /auth/register & None & Register new user account \\
+\hline
+POST & /auth/login-sso & None & SSO login with provider token \\
+\hline
+POST & /auth/add-info & None & Complete OAuth signup with password \\
+\hline
+POST & /auth/google-register & None & Complete Google OAuth registration \\
+\hline
+POST & /auth/verify & JWT & Send verification email \\
+\hline
+GET & /auth/verify & None & Verify email with token \\
+\hline
+GET & /auth/reverify & None & Resend verification email \\
+\hline
+POST & /auth/change-password & None & Change user password \\
+\hline
+POST & /auth/forgot-password & None & Request password reset code \\
+\hline
+POST & /auth/reset-password & None & Reset password with code \\
+\hline
+POST & /auth/verify-token & None & Validate access token \\
+\hline
+POST & /auth/logout & JWT & Logout and blacklist token \\
+\hline
+POST & /auth/refresh-token & None & Refresh expired access token \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Login Endpoint}
+
+The primary login endpoint authenticates users with email and password credentials.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Login Request}]
+POST /auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "securePassword123",
+  "appId": "optional-app-id",
+  "appSecret": "optional-app-secret"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (Success):}
+\begin{lstlisting}[language=TypeScript, caption={Login Success Response}]
+{
+  "statusCode": 200,
+  "success": true,
+  "message": "Login successful",
+  "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "subscriptionEnd": 1735689600000,
+  "isVerified": true
+}
+\end{lstlisting}
+
+Figure~\ref{fig:auth_login_flow} illustrates the complete login flow including single-session enforcement.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/auth_login_flow.png}
+\caption{Login Authentication Flow}
+\label{fig:auth_login_flow}
+\end{figure}
+
+\paragraph{Registration Endpoint}
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Registration Request}]
+POST /auth/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securePassword123",
+  "appId": "optional-app-id",
+  "appSecret": "optional-app-secret"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (Success):}
+\begin{lstlisting}[language=TypeScript, caption={Registration Success Response}]
+{
+  "statusCode": 201,
+  "message": "User registered successfully",
+  "success": true,
+  "user": {
+    "_id": "64abc123def456789",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "isVerified": false,
+    "role": "user"
+  }
+}
+\end{lstlisting}
+
+Figure~\ref{fig:auth_register_flow} shows the registration flow.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/auth_register_flow.png}
+\caption{User Registration Flow}
+\label{fig:auth_register_flow}
+\end{figure}
+
+\paragraph{SSO Login Endpoint}
+
+This endpoint handles SSO authentication using tokens from OAuth providers.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={SSO Login Request}]
+POST /auth/login-sso
+Content-Type: application/json
+
+{
+  "token": "google-or-apple-id-token",
+  "oauthClient": "google|apple|microsoft",
+  "appId": "optional-app-id",
+  "appSecret": "optional-app-secret"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (Success):}
+\begin{lstlisting}[language=TypeScript, caption={SSO Login Success Response}]
+{
+  "statusCode": 200,
+  "message": "Login successful",
+  "data": {
+    "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": "user_123",
+      "email": "user@example.com",
+      "name": "John Doe",
+      "oauthProvider": "google"
+    }
+  }
+}
+\end{lstlisting}
+
+\paragraph{Password Management Endpoints}
+
+\noindent\textbf{Change Password Request:}
+\begin{lstlisting}[language=TypeScript, caption={Change Password Request}]
+POST /auth/change-password
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "currentPassword": "oldPassword123",
+  "newPassword": "newSecurePassword456",
+  "confirmNewPassword": "newSecurePassword456"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (Success):}
+\begin{lstlisting}[language=TypeScript, caption={Change Password Success Response}]
+{
+  "statusCode": 200,
+  "message": "Password changed successfully"
+}
+\end{lstlisting}
+
+\noindent\textbf{Forgot Password Request:}
+\begin{lstlisting}[language=TypeScript, caption={Forgot Password Request}]
+POST /auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (Success):}
+\begin{lstlisting}[language=TypeScript, caption={Forgot Password Success Response}]
+{
+  "statusCode": 200,
+  "message": "Password reset code sent to email"
+}
+\end{lstlisting}
+
+\noindent\textbf{Reset Password Request:}
+\begin{lstlisting}[language=TypeScript, caption={Reset Password Request}]
+POST /auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "code": "123456",
+  "newPassword": "newSecurePassword456",
+  "confirmNewPassword": "newSecurePassword456"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (Success):}
+\begin{lstlisting}[language=TypeScript, caption={Reset Password Success Response}]
+{
+  "statusCode": 200,
+  "message": "Password reset successfully"
+}
+\end{lstlisting}
+
+Figure~\ref{fig:auth_password_reset_flow} shows the password reset flow.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/auth_password_reset_flow.png}
+\caption{Password Reset Flow}
+\label{fig:auth_password_reset_flow}
+\end{figure}
+
+\paragraph{Token Management}
+
+Figure~\ref{fig:token_lifecycle} illustrates the complete token lifecycle from generation to revocation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/token_lifecycle.png}
+\caption{JWT Token Lifecycle Management}
+\label{fig:token_lifecycle}
+\end{figure}
+
+\noindent\textbf{Verify Token Request:}
+\begin{lstlisting}[language=TypeScript, caption={Verify Token Request}]
+POST /auth/verify-token
+Content-Type: application/json
+
+{
+  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+\end{lstlisting}
+
+\noindent\textbf{Verify Token Response:}
+\begin{lstlisting}[language=TypeScript, caption={Verify Token Response}]
+{
+  "statusCode": 200,
+  "valid": true,
+  "expired": false,
+  "user": {
+    "id": "64abc123def456789",
+    "email": "user@example.com",
+    "role": "user",
+    "name": "John Doe",
+    "type": "user",
+    "isVerified": true
+  },
+  "expiresAt": 1735689600,
+  "message": "Token is valid"
+}
+\end{lstlisting}
+
+Figure~\ref{fig:auth_verify_token_flow} shows the token verification flow.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/auth_verify_token_flow.png}
+\caption{Token Verification Flow}
+\label{fig:auth_verify_token_flow}
+\end{figure}
+
+\noindent\textbf{Refresh Token Request:}
+\begin{lstlisting}[language=TypeScript, caption={Refresh Token Request}]
+POST /auth/refresh-token
+Content-Type: application/json
+
+{
+  "token": "expired-access-token"
+}
+\end{lstlisting}
+
+\noindent\textbf{Refresh Token Response:}
+\begin{lstlisting}[language=TypeScript, caption={Refresh Token Response}]
+{
+  "accessToken": "new-access-token",
+  "subscriptionEnd": 1735689600000,
+  "isVerified": true
+}
+\end{lstlisting}
+
+\noindent\textbf{Logout Request:}
+\begin{lstlisting}[language=TypeScript, caption={Logout Request}]
+POST /auth/logout
+Authorization: Bearer <access-token>
+\end{lstlisting}
+
+\noindent\textbf{Logout Response:}
+\begin{lstlisting}[language=TypeScript, caption={Logout Response}]
+{
+  "statusCode": 200,
+  "message": "Logged out successfully. Your access token has been revoked."
+}
+\end{lstlisting}
+
+Figure~\ref{fig:auth_logout_flow} shows the logout flow with token blacklisting.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/auth_logout_flow.png}
+\caption{Logout Flow}
+\label{fig:auth_logout_flow}
+\end{figure}
+
+\paragraph{Token Blacklisting}
+
+The system implements token blacklisting for security, as shown in Figure~\ref{fig:token_blacklist_flow}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/token_blacklist_flow.png}
+\caption{Token Blacklisting Flow}
+\label{fig:token_blacklist_flow}
+\end{figure}
+
+Tokens are blacklisted in three scenarios:
+\begin{enumerate}
+    \item \textbf{Logout}: Current token is added with reason \texttt{logout}
+    \item \textbf{New Login}: All user tokens are blacklisted with reason \texttt{new-login} (single-session enforcement)
+    \item \textbf{Token Refresh}: Old token is blacklisted with reason \texttt{refresh}
+\end{enumerate}
+
+\paragraph{Local Authentication Strategy}
+
+The \texttt{LocalStrategy} validates email/password credentials using bcrypt:
+
+\begin{lstlisting}[language=TypeScript, caption={Local Strategy Implementation}]
+@Injectable()
+export class LocalStrategy extends PassportStrategy(Strategy) {
+  constructor(private authService: AuthService) {
+    super({ usernameField: 'email' })
+  }
+
+  async validate(email: string, password: string): Promise<User> {
+    const user = await this.authService.validateUser(email, password)
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials')
+    }
+    return user
+  }
+}
+\end{lstlisting}
+
+%----------------------------------------------------------------------
+\subsubsection{Google SSO Module}%
+\label{sec:google_sso_module}
+The Google SSO Module (\texttt{google-sso/}) implements OAuth 2.0 authentication using Google's identity platform with Passport.js.
+
+\paragraph{Module Structure}
+
+Figure~\ref{fig:google_sso_module_structure} shows the Google SSO module organization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/google_sso_module_structure.png}
+\caption{Google SSO Module Structure}
+\label{fig:google_sso_module_structure}
+\end{figure}
+
+The module consists of:
+\begin{itemize}
+    \item \texttt{GoogleSSOController}: Handles \texttt{/auth/google/*} endpoints
+    \item \texttt{GoogleAuthGuard}: Custom Passport guard with state parameter encoding
+    \item \texttt{GoogleStrategy}: Passport strategy configured with OAuth credentials
+    \item \texttt{GoogleSSOModule}: NestJS module importing \texttt{PassportModule} and \texttt{AuthModule}
+\end{itemize}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:google_sso_endpoints} lists the Google SSO endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Google SSO API Endpoints}
+\label{tab:google_sso_endpoints}
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\hline
+GET & /auth/google/login & Initiate Google OAuth login (redirects to Google) \\
+\hline
+GET & /auth/google/callback & Handle OAuth callback from Google \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Login Endpoint}
+
+Initiates the Google OAuth flow by redirecting to Google's consent screen.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=bash, caption={Google Login Request}]
+GET /auth/google/login?redirect=https://app.example.com&appId=123&prompt=select_account
+\end{lstlisting}
+
+\noindent\textbf{Query Parameters:}
+\begin{itemize}
+    \item \texttt{redirect} (optional): Frontend URL to redirect after authentication
+    \item \texttt{appId} (optional): Application ID for multi-tenant scenarios
+    \item \texttt{appSecret} (optional): Application secret
+    \item \texttt{prompt} (optional): Google OAuth prompt parameter (\texttt{select\_account}, \texttt{consent}, \texttt{none})
+\end{itemize}
+
+\paragraph{Callback Endpoint}
+
+Handles the OAuth callback from Google after user authentication.
+
+\noindent\textbf{For New Users:} Redirects to \texttt{/complete-signup} with temporary token stored in \texttt{localStorage}:
+\begin{lstlisting}[language=html, caption={New User Redirect Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('temporaryToken', '<temp-jwt>');
+      window.location.href = 'https://app.example.com/complete-signup';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\noindent\textbf{For Existing Users:} Redirects to \texttt{/sign-in} with access token stored in \texttt{localStorage}:
+\begin{lstlisting}[language=html, caption={Existing User Redirect Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('accessToken', '<access-token>');
+      localStorage.setItem('jwt', '<access-token>');
+      localStorage.setItem('subscriptionEnd', '1735689600000');
+      localStorage.setItem('isVerified', 'true');
+      window.location.href = 'https://app.example.com/sign-in';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\paragraph{OAuth Flow}
 
 Figure~\ref{fig:google_sso_oauth_flow} shows the complete OAuth flow including state parameter handling.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.9\textwidth]{images/google_sso_oauth_flow.png}
+\includegraphics[width=0.95\textwidth]{images/google_sso_oauth_flow.png}
 \caption{Google OAuth 2.0 Authentication Flow}
 \label{fig:google_sso_oauth_flow}
 \end{figure}
 
-\noindent\textbf{Google Strategy}\\
+\paragraph{Google Strategy Implementation}
 
 The strategy is configured with OAuth credentials and requests email and profile scopes:
 
@@ -78,9 +552,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 }
 \end{lstlisting}
 
-\noindent\textbf{State Parameter for Context Preservation}\\
+\paragraph{State Parameter for Context Preservation}
 
-Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect to maintain user session context (e.g., redirect URL).
+Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect to maintain user session context.
 
 \begin{figure}[H]
 \centering
@@ -114,7 +588,98 @@ export class GoogleAuthGuard extends AuthGuard('google') {
 }
 \end{lstlisting}
 
-\subsubsection{Apple Sign-In Implementation}
+%----------------------------------------------------------------------
+\subsubsection{Apple SSO Module}%
+\label{sec:apple_sso_module}
+The Apple SSO Module (\texttt{apple-sso/}) implements Sign in with Apple using POST callback and JWT token verification.
+
+\paragraph{Module Structure}
+
+Figure~\ref{fig:apple_sso_module_structure} shows the Apple SSO module organization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{images/apple_sso_module_structure.png}
+\caption{Apple SSO Module Structure}
+\label{fig:apple_sso_module_structure}
+\end{figure}
+
+The module consists of:
+\begin{itemize}
+    \item \texttt{AppleSSOController}: Handles \texttt{/auth/apple/*} endpoints
+    \item \texttt{AppleSSOModule}: NestJS module importing \texttt{AuthModule}
+    \item Uses \texttt{apple-signin-auth} library for token verification
+\end{itemize}
+
+\paragraph{API Endpoints}
+
+Table~\ref{tab:apple_sso_endpoints} lists the Apple SSO endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Apple SSO API Endpoints}
+\label{tab:apple_sso_endpoints}
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\hline
+POST & /auth/apple/callback & Handle Apple Sign-In callback with identity token \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Callback Endpoint}
+
+Handles the POST callback from Apple Sign-In with the identity token.
+
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Apple Callback Request}]
+POST /auth/apple/callback
+Content-Type: application/json
+
+{
+  "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "code": "authorization-code-from-apple"
+}
+\end{lstlisting}
+
+\noindent\textbf{Response (New User):} Returns HTML that stores temporary token and redirects to complete signup:
+\begin{lstlisting}[language=html, caption={Apple New User Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('temporaryToken', '<temp-jwt>');
+      window.location.href = 'https://app.example.com/complete-signup';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\noindent\textbf{Response (Existing User):} Returns HTML that stores access token and redirects to sign-in:
+\begin{lstlisting}[language=html, caption={Apple Existing User Response}]
+<html>
+  <head>
+    <script>
+      localStorage.setItem('accessToken', '<access-token>');
+      localStorage.setItem('jwt', '<access-token>');
+      localStorage.setItem('subscriptionEnd', '1735689600000');
+      localStorage.setItem('isVerified', 'true');
+      window.location.href = 'https://app.example.com/sign-in';
+    </script>
+  </head>
+</html>
+\end{lstlisting}
+
+\noindent\textbf{Response (Error - JSON):}
+\begin{lstlisting}[language=TypeScript, caption={Apple Error Response}]
+{
+  "statusCode": 401,
+  "success": false,
+  "message": "Apple authentication failed: No id_token received"
+}
+\end{lstlisting}
+
+\paragraph{Authentication Flow}
 
 Figure~\ref{fig:auth_apple_flow} shows the Apple Sign-In flow which uses POST callback instead of redirect-based OAuth.
 
@@ -125,11 +690,21 @@ Figure~\ref{fig:auth_apple_flow} shows the Apple Sign-In flow which uses POST ca
 \label{fig:auth_apple_flow}
 \end{figure}
 
-\noindent\textbf{Token Verification}\\
+\paragraph{Token Verification}
+
+Figure~\ref{fig:apple_sso_token_verification} shows the token verification process with fallback mechanism.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/apple_sso_token_verification.png}
+\caption{Apple Token Verification Flow}
+\label{fig:apple_sso_token_verification}
+\end{figure}
 
 Apple tokens are verified using the \texttt{apple-signin-auth} library with fallback to manual verification:
 
-\begin{lstlisting}[language=TypeScript, caption={Apple SSO Controller}]
+\begin{lstlisting}[language=TypeScript, caption={Apple SSO Controller Implementation}]
+@ApiTags('Apple SSO')
 @Controller('auth/apple')
 export class AppleSSOController {
   constructor(private readonly authService: AuthService) {}
@@ -138,12 +713,15 @@ export class AppleSSOController {
   async appleAuthCallback(@Body() body: AppleAuthDto, @Res() res: Response) {
     if (!body.code && !body.id_token) {
       return res.status(HttpStatus.UNAUTHORIZED).json({
+        statusCode: HttpStatus.UNAUTHORIZED,
+        success: false,
         message: 'Apple authentication failed: No id_token received',
       })
     }
 
     let appleResponse
     try {
+      // Primary verification using apple-signin-auth library
       appleResponse = await appleSignin.verifyIdToken(body.id_token, {
         audience: process.env.APPLE_CLIENT_ID,
         ignoreExpiration: false,
@@ -154,68 +732,109 @@ export class AppleSSOController {
     }
 
     const result = await this.authService.checkUserByEmail(appleResponse.email)
-    // Handle new/existing user and redirect
+    // Handle new/existing user and redirect accordingly
   }
 }
 \end{lstlisting}
 
-\subsubsection{Token Management}
+\paragraph{Manual Token Verification}
 
-Figure~\ref{fig:token_lifecycle} illustrates the complete token lifecycle from generation to revocation.
+The fallback verification in \texttt{AuthService} validates Apple tokens manually:
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.9\textwidth]{images/token_lifecycle.png}
-\caption{JWT Token Lifecycle Management}
-\label{fig:token_lifecycle}
-\end{figure}
+\begin{lstlisting}[language=TypeScript, caption={Apple Token Manual Verification}]
+async verifyAppleToken(token: string): Promise<any> {
+  // Get all possible Apple Client IDs
+  const appleClientIds = [
+    this.configService.get('auth.appleClientId'),
+    this.configService.get('auth.appleClientIdAndroid'),
+  ].filter(Boolean)
 
-When users authenticate via SSO:
+  // Decode JWT token to get header and payload
+  const decoded = jwt.decode(token, { complete: true })
+  if (!decoded) {
+    throw new UnauthorizedException('Invalid Apple token format')
+  }
+
+  const payload = decoded.payload as any
+
+  // Verify issuer
+  if (payload.iss !== 'https://appleid.apple.com') {
+    throw new UnauthorizedException('Invalid Apple token issuer')
+  }
+
+  // Check expiration
+  const now = Math.floor(Date.now() / 1000)
+  if (payload.exp && payload.exp < now) {
+    throw new UnauthorizedException('Apple token has expired')
+  }
+
+  // Verify audience matches configured client IDs
+  for (const clientId of appleClientIds) {
+    if (payload.aud === clientId) {
+      return payload
+    }
+  }
+
+  throw new UnauthorizedException('Apple token audience mismatch')
+}
+\end{lstlisting}
+
+%----------------------------------------------------------------------
+\subsubsection{Shared SSO Behavior}%
+\label{sec:shared_sso_behavior}
+Both Google and Apple SSO modules share common behavior through the \texttt{AuthService}.
+
+\paragraph{User Flow After SSO Authentication}
 
 \begin{enumerate}
     \item \textbf{New Users}: A 15-minute temporary JWT is generated with \texttt{need\_password: true}. The frontend redirects to \texttt{/complete-signup} where the user sets a password.
     \item \textbf{Existing Users}: All previous tokens are revoked (single-session policy), a new JWT is issued, and stored in the \texttt{usertokens} collection.
-    \item \textbf{Token Revocation}: On new login, all active tokens are blacklisted in \texttt{tokenblacklists} collection.
 \end{enumerate}
 
-\noindent\textbf{Token Blacklisting Flow}\\
+\paragraph{Temporary Token Generation}
 
-Figure~\ref{fig:token_blacklist_flow} shows how tokens are blacklisted for security.
+The \texttt{AuthService} generates a temporary JWT token for new SSO users that expires in 15 minutes:
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.75\textwidth]{images/token_blacklist_flow.png}
-\caption{Token Blacklisting Flow}
-\label{fig:token_blacklist_flow}
-\end{figure}
-
-\begin{lstlisting}[language=TypeScript, caption={Temporary Token Generation}]
-async generateTemporaryToken(email: string, appId?: string): Promise<string> {
+\begin{lstlisting}[language=TypeScript, caption={Temporary Token Generation for SSO}]
+async generateTemporaryToken(
+  email: string, 
+  appId?: string, 
+  appSecret?: string
+): Promise<string> {
   const payload = {
     email: email.toLowerCase(),
     need_password: true,
     appId: appId || null,
+    appSecret: appSecret || null,
   }
   return this.jwtService.sign(payload, { expiresIn: '15m' })
 }
 \end{lstlisting}
 
-\subsubsection{Module Structure}
+\paragraph{Complete Signup Endpoint}
 
-Figure~\ref{fig:google_sso_module_structure} shows the Google SSO module organization.
+New OAuth users complete registration by setting a password:
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.7\textwidth]{images/google_sso_module_structure.png}
-\caption{Google SSO Module Structure}
-\label{fig:google_sso_module_structure}
-\end{figure}
+\noindent\textbf{Request:}
+\begin{lstlisting}[language=TypeScript, caption={Complete Signup Request}]
+POST /auth/add-info
+Content-Type: application/json
 
-The SSO modules are organized as independent NestJS modules:
+{
+  "token": "temporary-jwt-token",
+  "password": "newSecurePassword123",
+  "fullname": "John Doe"
+}
+\end{lstlisting}
 
-\begin{itemize}
-    \item \texttt{GoogleSSOModule}: Imports \texttt{PassportModule}, \texttt{AuthModule}; provides \texttt{GoogleStrategy}
-    \item \texttt{AppleSSOModule}: Imports \texttt{AuthModule}; uses \texttt{apple-signin-auth} library
-\end{itemize}
-
-Both modules delegate user creation and authentication logic to the shared \texttt{AuthService}.
+\noindent\textbf{Response:}
+\begin{lstlisting}[language=TypeScript, caption={Complete Signup Response}]
+{
+  "statusCode": 201,
+  "success": true,
+  "message": "Account created successfully",
+  "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "subscriptionEnd": 1735689600000,
+  "isVerified": true
+}
+\end{lstlisting}

@@ -1,11 +1,11 @@
 \subsection{Authentication Frontend}
 \label{sec:frontend_auth}
 
-The frontend authentication system supports three login methods: email/password, Google OAuth, and Apple Sign-In.
+The frontend authentication system is built with Vue 3 Composition API, supporting three login methods: email/password, Google OAuth, and Apple Sign-In. The system uses a fetch-based Auth Service for unauthenticated requests and Axios for authenticated API calls.
 
 \subsubsection{Auth Service Architecture}
 
-The \texttt{AuthService} manages all authentication operations and token storage.
+The \texttt{AuthService} is a standalone service module using native fetch API to avoid circular dependencies with Axios interceptors. It manages all authentication operations and localStorage token persistence.
 
 \begin{table}[H]
 \centering
@@ -13,76 +13,322 @@ The \texttt{AuthService} manages all authentication operations and token storage
 \hline
 \textbf{Method} & \textbf{Description} \\
 \hline
-\texttt{login()} & Email/password authentication \\
+\texttt{login(data)} & Email/password authentication via POST /auth/login \\
 \hline
-\texttt{register()} & New account registration \\
+\texttt{register(data)} & New account registration via POST /auth/register \\
 \hline
-\texttt{initiateGoogleLogin()} & Redirect to Google OAuth \\
+\texttt{refreshToken(data)} & Refresh expired JWT via POST /auth/refresh-token \\
 \hline
-\texttt{initiateAppleLogin()} & Apple SDK sign-in flow \\
+\texttt{verifyToken(data)} & Validate JWT via POST /auth/verify-token \\
 \hline
-\texttt{refreshToken()} & Refresh expired JWT \\
+\texttt{logout(token)} & Revoke token via POST /auth/logout \\
 \hline
-\texttt{storeAuthData()} & Store token in localStorage \\
+\texttt{setPassword()} & Complete OAuth signup via POST /auth/add-info \\
 \hline
-\texttt{clearAuthData()} & Clear token on logout \\
+\texttt{initiateGoogleLogin()} & Redirect to /auth/google/login \\
+\hline
+\texttt{initiateAppleLogin()} & Trigger Apple SDK sign-in \\
+\hline
+\texttt{initializeAppleSignIn()} & Configure Apple SDK with clientId \\
+\hline
+\texttt{storeAuthData()} & Store tokens in localStorage \\
+\hline
+\texttt{clearAuthData()} & Clear all authentication data \\
+\hline
+\texttt{getAccessToken()} & Retrieve stored access token \\
+\hline
+\texttt{isAuthenticated()} & Check if user has valid token \\
+\hline
+\texttt{handleApiError()} & Standardize error handling \\
 \hline
 \end{tabular}
 \caption{Auth Service Methods}
 \label{tab:auth_service_methods}
 \end{table}
 
+\paragraph{Auth Service Implementation}
+
+The service uses native fetch with manual error handling to prevent interceptor loops:
+
+\begin{lstlisting}[language=JavaScript, caption={Auth Service Core Methods}]
+const API_URL = import.meta.env.VITE_GATEWAY_URL
+
+export const authService = {
+  async login(data) {
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        const err = new Error('API Error')
+        err.response = result
+        throw err
+      }
+      return result
+    } catch (error) {
+      return this.handleApiError(error)
+    }
+  },
+
+  async refreshToken(data) {
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        const err = new Error('API Error')
+        err.response = result
+        throw err
+      }
+      return result
+    } catch (error) {
+      return this.handleApiError(error)
+    }
+  },
+
+  storeAuthData(accessToken, subscriptionEnd, isVerified) {
+    localStorage.setItem('accessToken', accessToken)
+    localStorage.setItem('jwt', accessToken) // Backward compatibility
+
+    if (subscriptionEnd !== undefined && subscriptionEnd !== null) {
+      localStorage.setItem('subscriptionEnd', subscriptionEnd.toString())
+    }
+
+    if (isVerified !== undefined && isVerified !== null) {
+      localStorage.setItem('isVerified', isVerified.toString())
+    }
+  },
+
+  getAccessToken() {
+    return localStorage.getItem('accessToken') || 
+           localStorage.getItem('jwt')
+  },
+
+  clearAuthData() {
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('jwt')
+    localStorage.removeItem('subscriptionEnd')
+    localStorage.removeItem('isVerified')
+  },
+
+  isAuthenticated() {
+    return !!this.getAccessToken()
+  }
+}
+\end{lstlisting}
+
+\subsubsection{useAuth Composable}
+
+The \texttt{useAuth} composable replaces Vue 2 mixins, providing reactive authentication state and methods to components using the Composition API.
+
+\begin{lstlisting}[language=JavaScript, caption={useAuth Composable Implementation}]
+import { computed, ref, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import authService from '@/services/auth.service'
+
+export function useAuth() {
+  const router = useRouter()
+  const authTokenCheckInterval = ref(null)
+
+  // Reactive computed properties
+  const isAuthenticated = computed(() => authService.isAuthenticated())
+  const accessToken = computed(() => authService.getAccessToken())
+  const subscriptionEnd = computed(() => authService.getSubscriptionEnd())
+  const isVerified = computed(() => authService.getIsVerified())
+
+  // Logout method
+  async function logout() {
+    try {
+      const token = authService.getAccessToken()
+      if (token) {
+        await authService.logout(token)
+      }
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      authService.clearAuthData()
+      router.push('/sign-in')
+    }
+  }
+
+  // Token verification and refresh
+  async function verifyAndRefreshToken() {
+    const token = authService.getAccessToken()
+    if (!token) return
+
+    try {
+      const result = await authService.verifyToken({ token })
+
+      if (!result.valid) {
+        if (result.expired) {
+          // Attempt token refresh
+          try {
+            const refreshResult = await authService.refreshToken({ token })
+            authService.storeAuthData(
+              refreshResult.accessToken,
+              refreshResult.subscriptionEnd,
+              refreshResult.isVerified
+            )
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError)
+            authService.clearAuthData()
+            router.push('/sign-in')
+          }
+        } else {
+          console.error('Token is invalid:', result.message)
+          authService.clearAuthData()
+          router.push('/sign-in')
+        }
+      }
+    } catch (error) {
+      console.error('Token verification error:', error)
+    }
+  }
+
+  // Start automatic token verification (every 5 minutes)
+  function startTokenVerification() {
+    verifyAndRefreshToken()
+    authTokenCheckInterval.value = setInterval(() => {
+      verifyAndRefreshToken()
+    }, 5 * 60 * 1000)
+  }
+
+  // Stop automatic verification
+  function stopTokenVerification() {
+    if (authTokenCheckInterval.value) {
+      clearInterval(authTokenCheckInterval.value)
+      authTokenCheckInterval.value = null
+    }
+  }
+
+  // Cleanup on component unmount
+  onBeforeUnmount(() => {
+    stopTokenVerification()
+  })
+
+  return {
+    isAuthenticated,
+    accessToken,
+    subscriptionEnd,
+    isVerified,
+    logout,
+    verifyAndRefreshToken,
+    startTokenVerification,
+    stopTokenVerification
+  }
+}
+\end{lstlisting}
+
+\paragraph{Component Usage Example}
+
+Components can use the composable to access authentication state:
+
+\begin{lstlisting}[language=JavaScript, caption={Using useAuth in Components}]
+<script setup>
+import { useAuth } from '@/composables/useAuth'
+
+const { 
+  isAuthenticated, 
+  accessToken, 
+  logout,
+  startTokenVerification 
+} = useAuth()
+
+// Start token verification when component mounts
+startTokenVerification()
+</script>
+\end{lstlisting}
+
 \subsubsection{Token Storage}
 
-Authentication data is stored in localStorage for persistence:
+Authentication data is stored in localStorage for persistence across page reloads:
 
-\begin{lstlisting}[language=TypeScript, caption={LocalStorage Token Schema}]
+\begin{lstlisting}[language=JavaScript, caption={LocalStorage Token Schema}]
 {
-  accessToken: "eyJhbGciOiJIUzI1NiIs...",
-  jwt: "eyJhbGciOiJIUzI1NiIs...",   // backward compat
-  subscriptionEnd: "1737244800000",  // Unix timestamp
-  isVerified: "true"
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "jwt": "eyJhbGciOiJIUzI1NiIs...",      // Backward compatibility
+  "subscriptionEnd": "1737244800000",     // Unix timestamp (ms)
+  "isVerified": "true"                    // String boolean
 }
 \end{lstlisting}
 
 \subsubsection{OAuth Integration}
 
-\noindent\textbf{Google OAuth}
+\paragraph{Google OAuth}
 
 Google OAuth uses redirect-based authentication:
 
-\begin{lstlisting}[language=TypeScript, caption={Google OAuth Initiation}]
+\begin{lstlisting}[language=JavaScript, caption={Google OAuth Flow}]
+// Initiate Google login (in AuthService)
 initiateGoogleLogin() {
-  const frontendUrl = encodeURIComponent(window.location.origin)
-  const redirectUrl = `${API_URL}/auth/google/login` + 
-    `?redirect=${frontendUrl}/sign-in`
-  
-  window.location.href = redirectUrl
+  const frontendUrl = window.location.origin
+  const url = `${API_URL}/auth/google/login?redirect=${
+    encodeURIComponent(frontendUrl)
+  }`
+  window.location.href = url
 }
+
+// After OAuth callback, backend redirects to frontend with:
+// <script>
+//   localStorage.setItem('accessToken', '<token>')
+//   localStorage.setItem('subscriptionEnd', '<timestamp>')
+//   localStorage.setItem('isVerified', 'true')
+//   window.location.href = '/sign-in'
+// </script>
 \end{lstlisting}
 
-\noindent\textbf{Apple Sign-In}
+\paragraph{Apple Sign-In}
 
-Apple Sign-In uses the Apple SDK:
+Apple Sign-In uses the Apple SDK with initialization:
 
-\begin{lstlisting}[language=TypeScript, caption={Apple Sign-In Initialization}]
+\begin{lstlisting}[language=JavaScript, caption={Apple Sign-In Integration}]
+// Initialize Apple SDK (call on app load)
 initializeAppleSignIn(clientId) {
   if (!window.AppleID) {
-    console.warn('Apple SDK not loaded')
+    console.warn('Apple Sign-In SDK not loaded yet')
     return false
   }
 
-  window.AppleID.auth.init({
-    clientId: clientId || process.env.VUE_APP_APPLE_CLIENT_ID,
-    scope: 'name email',
-    redirectURI: `${API_URL}/auth/apple/callback`,
-    usePopup: false
-  })
-  return true
+  try {
+    const appleClientId = clientId || 
+      import.meta.env.VITE_APPLE_CLIENT_ID
+
+    window.AppleID.auth.init({
+      clientId: appleClientId,
+      scope: 'name email',
+      redirectURI: `${API_URL}/auth/apple/callback`,
+      usePopup: false
+    })
+    return true
+  } catch (error) {
+    console.error('Failed to initialize Apple Sign-In:', error)
+    return false
+  }
 }
 
+// Trigger Apple Sign-In
 async initiateAppleLogin() {
-  await window.AppleID.auth.signIn()
+  return new Promise((resolve, reject) => {
+    if (!window.AppleID) {
+      reject(new Error('Apple Sign-In SDK not loaded'))
+      return
+    }
+
+    try {
+      window.AppleID.auth.signIn()
+      resolve()
+    } catch (error) {
+      reject(error)
+    }
+  })
 }
 \end{lstlisting}
 
@@ -90,39 +336,36 @@ async initiateAppleLogin() {
 
 New OAuth users must complete signup by setting a password:
 
-\begin{lstlisting}[language=TypeScript, caption={Complete Signup Implementation}]
-async setPassword(temporaryToken, password, fullname) {
-  const response = await http.post('/auth/add-info', {
-    token: temporaryToken,
-    password,
-    fullname
-  })
-  
-  const { accessToken, subscriptionEnd, isVerified } = 
-    response.data
-  this.storeAuthData(accessToken, subscriptionEnd, isVerified)
-  
-  localStorage.removeItem('temporaryToken')
-  return response.data
+\begin{lstlisting}[language=JavaScript, caption={Complete Signup Implementation}]
+async setPassword(token, password, fullname) {
+  try {
+    const response = await fetch(`${API_URL}/auth/add-info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        password,
+        fullname
+      })
+    })
+
+    const result = await response.json()
+    if (!response.ok) {
+      const err = new Error('API Error')
+      err.response = result
+      throw err
+    }
+
+    // Store new authentication data
+    const { accessToken, subscriptionEnd, isVerified } = result
+    this.storeAuthData(accessToken, subscriptionEnd, isVerified)
+
+    // Clear temporary token
+    localStorage.removeItem('temporaryToken')
+
+    return result
+  } catch (error) {
+    return this.handleApiError(error)
+  }
 }
 \end{lstlisting}
-
-\subsubsection{Auth Mixin}
-
-The auth mixin provides authentication state to components:
-
-\begin{lstlisting}[language=TypeScript, caption={Auth Mixin Usage}]
-import { authMixin } from '@/mixins/auth.mixin'
-
-export default {
-  mixins: [authMixin],
-  // Component now has access to:
-  // - this.isAuthenticated
-  // - this.accessToken
-  // - this.subscriptionEnd
-  // - this.logout()
-  // - this.verifyAndRefreshToken()
-}
-\end{lstlisting}
-
-The mixin automatically starts token verification on mount and cleans up on destroy.

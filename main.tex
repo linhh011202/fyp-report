@@ -22,9 +22,23 @@
 \usepackage{listings}
 \usepackage{float}
 
+% Enable numbering for paragraphs (4 levels deep: chapter.section.subsection.subsubsection)
+\setcounter{secnumdepth}{4}
+
 % Listings configuration for TypeScript
 \lstdefinelanguage{TypeScript}{
   keywords={async, await, break, case, catch, class, const, continue, debugger, default, delete, do, else, enum, export, extends, false, finally, for, from, function, if, import, in, instanceof, let, new, null, return, super, switch, this, throw, true, try, typeof, var, void, while, with, yield, Promise, any, string, number, boolean, undefined},
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  morestring=[b]`,
+  sensitive=true
+}
+
+% Listings configuration for JavaScript
+\lstdefinelanguage{JavaScript}{
+  keywords={async, await, break, case, catch, class, const, continue, debugger, default, delete, do, else, export, extends, false, finally, for, from, function, if, import, in, instanceof, let, new, null, return, super, switch, this, throw, true, try, typeof, var, void, while, with, yield, Promise, computed, ref, onMounted, onBeforeUnmount, watch, reactive, inject, provide, setup},
   morecomment=[l]{//},
   morecomment=[s]{/*}{*/},
   morestring=[b]',

@@ -1,7 +1,7 @@
 \subsection{Overview}
 \label{sec:frontend_overview}
 
-The Gateway Dashboard is a Vue.js 3 web application that provides a management interface for the Speech Gateway API.
+The Gateway Dashboard is a Vue.js 3 web application built with the Composition API and Vite, providing a modern management interface for the Speech Gateway API with real-time subscription management and authentication.
 
 \subsubsection{Frontend Architecture}
 
@@ -14,13 +14,15 @@ Figure~\ref{fig:frontend_architecture} illustrates the layered architecture of t
 \label{fig:frontend_architecture}
 \end{figure}
 
-The frontend follows a layered architecture:
+The frontend follows a modern layered architecture with Vue 3 Composition API:
 \begin{itemize}
-    \item \textbf{Vue Router}: Manages navigation and route guards.
-    \item \textbf{Views/Pages}: Page-level components for each route.
-    \item \textbf{Components}: Reusable UI components like PlanCard.
-    \item \textbf{Services Layer}: API communication logic.
-    \item \textbf{HTTP Client}: Axios with interceptors for token handling.
+    \item \textbf{Vue Router 4}: Client-side routing with navigation guards and beforeEach hooks
+    \item \textbf{Views/Pages}: Page-level components using Composition API and composables
+    \item \textbf{Composables}: Reusable composition functions (useAuth, useGlobalState, useSnackbar)
+    \item \textbf{Components}: Reusable UI components like PlanCard with reactive properties
+    \item \textbf{Services Layer}: API communication with fetch and Axios for authenticated requests
+    \item \textbf{HTTP Interceptors}: Automatic token refresh and error handling middleware
+    \item \textbf{Global State}: Reactive state management using Vue's provide/inject pattern
 \end{itemize}
 
 \subsubsection{Technology Stack}
@@ -31,17 +33,25 @@ The frontend follows a layered architecture:
 \hline
 \textbf{Layer} & \textbf{Technology} & \textbf{Purpose} \\
 \hline
-Framework & Vue.js 3.x & Reactive UI framework \\
+Framework & Vue.js 3.5.13 & Reactive UI with Composition API \\
 \hline
-UI Library & Vuetify 3.x & Material design components \\
+Build Tool & Vite 6.x & Fast development and HMR \\
 \hline
-HTTP Client & Axios & API communication \\
+UI Library & Vuetify 3.8.0 & Material Design 3 components \\
 \hline
-Router & Vue Router & SPA navigation \\
+HTTP Client & Axios 1.7.9 & Authenticated API requests \\
 \hline
-State & Vue Instance + Mixins & Application state \\
+Router & Vue Router 4.5.0 & SPA navigation with guards \\
+\hline
+State & Provide/Inject & Global reactive state \\
+\hline
+JWT & jwt-decode 4.0.0 & Token decoding and validation \\
 \hline
 Payment & Stripe Checkout & Subscription processing \\
+\hline
+Charts & Chart.js 4.4.7 & Data visualization \\
+\hline
+Editor & JSONEditor 10.4.2 & Admin JSON plan editing \\
 \hline
 \end{tabular}
 \caption{Frontend Technology Stack}
@@ -54,26 +64,42 @@ Payment & Stripe Checkout & Subscription processing \\
 gateway-dashboard/
   src/
     components/
-      PlanCard.vue          # Subscription plan display
+      PlanCard.vue              # Subscription plan card component
+      HelloWorld.vue            # Welcome component
+    composables/
+      useAuth.js                # Authentication composable
+      useGlobalState.js         # Global state management
     layouts/
-      Main.vue              # Main app layout
-    mixins/
-      auth.mixin.js         # Auth functionality mixin
+      Main.vue                  # Main application layout
     router/
-      index.js              # Route definitions
-      hooks.js              # Navigation guards
+      index.js                  # Route definitions
+      hooks.js                  # Navigation guards (ensureSession, ensureSignedIn)
     services/
-      auth.service.js       # Authentication API
-      plans.service.js      # Plans API
-      stripe.service.js     # Stripe integration
-      user.service.js       # User/subscription API
+      auth.service.js           # Authentication API (fetch-based)
+      plans.service.js          # Plans API
+      stripe.service.js         # Stripe integration API
+      user.service.js           # User/subscription API
     views/
-      SignIn.vue            # Login page
-      SignUp.vue            # Registration page
-      CompleteSignup.vue    # OAuth completion
-      Subscription.vue      # Subscription management
-      admin/
-        JsonPlansEditor.vue # Admin plans editor
-    http.js                 # Axios HTTP client
-    main.js                 # App entry point
+      SignIn.vue                # Login page with OAuth
+      SignUp.vue                # Registration page
+      CompleteSignup.vue        # OAuth password completion
+      Subscription.vue          # Subscription management
+      Speeches.vue              # Speech processing view
+      Files.vue                 # File management
+      Applications.vue          # Application management
+      Users.vue                 # User management (admin)
+      RequestLog.vue            # Request logging (admin)
+      Settings.vue              # System settings (admin)
+      Success.vue               # Payment success page
+      Cancel.vue                # Payment cancel page
+      dashboard/
+        Dashboard.vue           # Admin dashboard
+    plugins/
+      vuetify.js                # Vuetify configuration
+    http.js                     # Axios instance with interceptors
+    main.js                     # Application entry point
+    App.vue                     # Root component
+    filters.js                  # Global filters
+  vite.config.js                # Vite configuration
+  package.json                  # Dependencies
 \end{lstlisting}

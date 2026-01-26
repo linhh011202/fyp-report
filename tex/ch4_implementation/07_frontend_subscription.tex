@@ -3,7 +3,7 @@
 
 The subscription interface provides plan selection, payment processing, and quota monitoring.
 
-\subsection{Component Architecture}
+\subsubsection{Component Architecture}
 
 The subscription system consists of interconnected components:
 \begin{itemize}
@@ -12,7 +12,7 @@ The subscription system consists of interconnected components:
     \item \textbf{JsonPlansEditor.vue}: Admin-only JSON editor for plan management.
 \end{itemize}
 
-\subsection{User Subscription View}
+\subsubsection{User Subscription View}
 
 For users with active subscriptions, the view displays:
 \begin{itemize}
@@ -38,7 +38,7 @@ getUsageColor(used, quota) {
 }
 \end{lstlisting}
 
-\subsection{PlanCard Component}
+\subsubsection{PlanCard Component}
 
 The PlanCard fetches pricing from Stripe and displays plan features:
 
@@ -81,7 +81,7 @@ get formattedPrice() {
 }
 \end{lstlisting}
 
-\subsection{Stripe Checkout Integration}
+\subsubsection{Stripe Checkout Integration}
 
 When a user subscribes, the frontend initiates Stripe Checkout:
 
@@ -104,7 +104,7 @@ async handleSubscribe(priceId) {
 }
 \end{lstlisting}
 
-\subsection{Cancel and Resume Subscription}
+\subsubsection{Cancel and Resume Subscription}
 
 Users can manage their subscription lifecycle:
 
@@ -132,7 +132,7 @@ async handleCancelSubscription() {
 }
 \end{lstlisting}
 
-\subsection{Admin Plans Editor}
+\subsubsection{Admin Plans Editor}
 
 Administrators access a JSON editor for managing plans:
 \begin{itemize}

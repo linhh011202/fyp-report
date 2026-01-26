@@ -1,9 +1,9 @@
 \subsection{Overview}
 \label{sec:frontend_overview}
 
-The Gateway Dashboard is a Vue.js 2 web application that provides a management interface for the Speech Gateway API. This chapter covers the frontend architecture, component design, and integration with the backend API.
+The Gateway Dashboard is a Vue.js 2 web application that provides a management interface for the Speech Gateway API.
 
-\subsection{Frontend Architecture}
+\subsubsection{Frontend Architecture}
 
 Figure~\ref{fig:frontend_architecture} illustrates the layered architecture of the frontend application.
 
@@ -23,7 +23,7 @@ The frontend follows a layered architecture:
     \item \textbf{HTTP Client}: Axios with interceptors for token handling.
 \end{itemize}
 
-\subsection{Technology Stack}
+\subsubsection{Technology Stack}
 
 \begin{table}[H]
 \centering
@@ -48,7 +48,7 @@ Payment & Stripe Checkout & Subscription processing \\
 \label{tab:frontend_tech_stack}
 \end{table}
 
-\subsection{Project Structure}
+\subsubsection{Project Structure}
 
 \begin{lstlisting}[caption={Frontend Project Structure}]
 gateway-dashboard/
@@ -77,12 +77,3 @@ gateway-dashboard/
     http.js                 # Axios HTTP client
     main.js                 # App entry point
 \end{lstlisting}
-
-\subsection{Chapter Organization}
-
-This chapter is organized as follows:
-\begin{itemize}
-    \item \textbf{Section 5.2}: Authentication frontend with OAuth integration
-    \item \textbf{Section 5.3}: Routing and navigation guards
-    \item \textbf{Section 5.4}: Subscription management interface
-\end{itemize}

@@ -1,8 +1,28 @@
 \chapter{Detailed Implementation}
 \label{chap:implementation}
 
-This chapter provides a comprehensive examination of the key implementation details of the Gateway Dashboard system. It covers the Single Sign-On (SSO) authentication implementation, the payment and subscription system, and the frontend development.
+This chapter provides a comprehensive examination of the key implementation details of the Gateway Dashboard system. It is organized into two main parts: Backend Implementation covering authentication and payment systems, and Frontend Development covering the Vue.js dashboard application.
+
+% ============================================================
+% PART 1: BACKEND IMPLEMENTATION
+% ============================================================
+\section{Backend Implementation}
+\label{sec:backend}
+
+This section covers the server-side implementation including Single Sign-On (SSO) authentication and payment/subscription management.
 
 \input{tex/ch4_implementation/01_sso}
 \input{tex/ch4_implementation/02_payment}
-\input{tex/ch4_implementation/03_frontend}
+
+% ============================================================
+% PART 2: FRONTEND IMPLEMENTATION  
+% ============================================================
+\section{Frontend Implementation}
+\label{sec:frontend}
+
+This section details the frontend implementation of the Gateway Dashboard, including the Vue.js architecture, component structure, routing implementation, and subscription management interface.
+
+\input{tex/ch4_implementation/04_frontend_overview}
+\input{tex/ch4_implementation/05_frontend_auth}
+\input{tex/ch4_implementation/06_frontend_routing}
+\input{tex/ch4_implementation/07_frontend_subscription}

@@ -54,7 +54,21 @@ stripeSubscriptionId & String & Stripe subscription ID \\
 \hline
 stripeCustomerId & String & Stripe customer ID \\
 \hline
-status & String & Subscription status \\
+planName & String & Current plan name \\
+\hline
+priceId & String & Stripe price ID \\
+\hline
+planId & String & Internal plan identifier \\
+\hline
+scheduledPriceId & String & Next scheduled price ID \\
+\hline
+scheduledPlanId & String & Next scheduled plan ID \\
+\hline
+scheduledPlanName & String & Next scheduled plan name \\
+\hline
+stripeScheduleId & String & Stripe schedule ID \\
+\hline
+status & String & Subscription status (active, canceled, etc.) \\
 \hline
 quota & Object & Service quotas (batch, live duration) \\
 \hline

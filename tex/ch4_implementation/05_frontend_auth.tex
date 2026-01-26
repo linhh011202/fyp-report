@@ -3,7 +3,7 @@
 
 The frontend authentication system supports three login methods: email/password, Google OAuth, and Apple Sign-In.
 
-\subsection{Auth Service Architecture}
+\subsubsection{Auth Service Architecture}
 
 The \texttt{AuthService} manages all authentication operations and token storage.
 
@@ -32,7 +32,7 @@ The \texttt{AuthService} manages all authentication operations and token storage
 \label{tab:auth_service_methods}
 \end{table}
 
-\subsection{Token Storage}
+\subsubsection{Token Storage}
 
 Authentication data is stored in localStorage for persistence:
 
@@ -45,25 +45,9 @@ Authentication data is stored in localStorage for persistence:
 }
 \end{lstlisting}
 
-\subsection{Email/Password Login}
+\subsubsection{OAuth Integration}
 
-\begin{lstlisting}[language=TypeScript, caption={Login Implementation}]
-async login({ email, password }) {
-  const response = await http.post('/auth/login', { 
-    email, password 
-  })
-  
-  const { accessToken, subscriptionEnd, isVerified } = 
-    response.data
-  
-  this.storeAuthData(accessToken, subscriptionEnd, isVerified)
-  return response.data
-}
-\end{lstlisting}
-
-\subsection{OAuth Integration}
-
-\subsubsection{Google OAuth}
+\noindent\textbf{Google OAuth}
 
 Google OAuth uses redirect-based authentication:
 
@@ -77,7 +61,7 @@ initiateGoogleLogin() {
 }
 \end{lstlisting}
 
-\subsubsection{Apple Sign-In}
+\noindent\textbf{Apple Sign-In}
 
 Apple Sign-In uses the Apple SDK:
 
@@ -102,7 +86,7 @@ async initiateAppleLogin() {
 }
 \end{lstlisting}
 
-\subsection{Complete Signup Flow}
+\subsubsection{Complete Signup Flow}
 
 New OAuth users must complete signup by setting a password:
 
@@ -123,7 +107,7 @@ async setPassword(temporaryToken, password, fullname) {
 }
 \end{lstlisting}
 
-\subsection{Auth Mixin}
+\subsubsection{Auth Mixin}
 
 The auth mixin provides authentication state to components:
 

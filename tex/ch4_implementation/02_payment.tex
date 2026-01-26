@@ -1,9 +1,284 @@
-\section{Payment \& Subscription Management}%
+\subsection{Payment \& Subscription Management}%
 \label{sec:payment}
 
-% TODO: Add payment implementation content here
-% The following files were referenced but do not exist:
-% - tex/ch4_payment/01_overview
-% - tex/ch4_payment/02_plan_management
-% - tex/ch4_payment/03_subscription
-% - tex/ch4_payment/04_stripe_integration
+This subsection documents the payment processing and subscription management system built with Stripe integration, Redis caching, and MongoDB persistence.
+
+\subsubsection{Architecture Overview}
+
+Figure~\ref{fig:payment_architecture} illustrates the payment system architecture showing the interaction between modules.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/payment_architecture.png}
+\caption{Payment System Architecture}
+\label{fig:payment_architecture}
+\end{figure}
+
+The payment system consists of three main modules:
+
+\begin{itemize}
+    \item \textbf{StripeModule}: Handles Stripe API interactions, checkout sessions, webhooks
+    \item \textbf{PlanModule}: Manages subscription plans with versioning and Redis caching
+    \item \textbf{SubscriptionModule}: Tracks user subscriptions, quotas, and usage
+\end{itemize}
+
+\subsubsection{Plan Management}
+
+Plans are stored as versioned JSON documents, cached in Redis for fast retrieval.
+
+\noindent\textbf{Plan Schema}\\
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Schema Definition}]
+@Schema({ timestamps: { createdAt: true, updatedAt: false } })
+export class Plan extends Document {
+  @Prop({ required: true, type: String, unique: true })
+  id: string;
+
+  @Prop({ required: true, type: String })
+  plans: string; // JSON string of plan details
+
+  @Prop({ required: true, type: Number, unique: true })
+  version: number;
+
+  createdAt?: Date;
+}
+\end{lstlisting}
+
+\noindent\textbf{Plan Versioning}\\
+
+Figure~\ref{fig:plan_versioning_flow} shows how plan versions are managed over time.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/plan_versioning_flow.png}
+\caption{Plan Versioning Flow}
+\label{fig:plan_versioning_flow}
+\end{figure}
+
+\noindent\textbf{Redis Caching with Cache Penetration Protection}\\
+
+Figure~\ref{fig:plan_caching} illustrates the cache-aside pattern with NULL value caching.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{images/plan_caching.png}
+\label{fig:plan_caching_ch4}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, caption={Plan Caching Implementation}]
+@Injectable()
+export class PlanService implements OnModuleInit, OnModuleDestroy {
+  private readonly CACHE_KEY = 'plan:latest';
+  private readonly CACHE_TTL = 3600; // 1 hour
+  private readonly NULL_TTL = 60; // 60 seconds
+
+  async getLatestVersion(): Promise<Plan | null> {
+    const cached = await this.redisClient.get(this.CACHE_KEY);
+    if (cached) {
+      if (cached === 'NULL') return null; // Cache penetration protection
+      return JSON.parse(cached) as Plan;
+    }
+
+    const latestPlan = await this.planModel
+      .findOne().sort({ version: -1 }).exec();
+
+    if (latestPlan) {
+      await this.redisClient.set(this.CACHE_KEY, JSON.stringify(latestPlan), {
+        EX: this.CACHE_TTL,
+      });
+    } else {
+      await this.redisClient.set(this.CACHE_KEY, 'NULL', {
+        EX: this.NULL_TTL,
+      });
+    }
+    return latestPlan;
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Stripe Integration}
+
+\noindent\textbf{Checkout Flow}\\
+
+Figure~\ref{fig:stripe_checkout_flow} shows the complete Stripe Checkout flow from user request to subscription creation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/stripe_checkout_flow.png}
+\caption{Stripe Checkout Session Flow}
+\label{fig:stripe_checkout_flow}
+\end{figure}
+
+\noindent\textbf{Checkout Session Creation}\\
+
+\begin{lstlisting}[language=TypeScript, caption={Checkout Session Creation}]
+@UseGuards(JwtAuthGuard)
+@Post('stripe-checkout-session')
+async createCheckoutSession(@Body() dto: CreateCheckoutSessionDto, @Req() req) {
+  const userId = req.user?._id?.toString();
+  const customerEmail = req.user?.email;
+
+  const result = await this.stripeService.createCheckoutSession(
+    dto.priceId,
+    customerEmail,
+    customerName,
+    userId, // Stored in metadata for webhook
+  );
+  return result;
+}
+\end{lstlisting}
+
+
+Webhooks process subscription events with signature verification:
+
+\begin{lstlisting}[language=TypeScript, caption={Stripe Webhook Handler}]
+@Post('webhook')
+async handleWebhook(@Headers('stripe-signature') signature, @Req() req) {
+  const payload = req.body as Buffer;
+  const event = await this.stripeService.handleWebhook(payload, signature);
+
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      const fullSession = await this.stripeService.getSessionWithLineItems(
+        session.id
+      );
+      const userId = fullSession.metadata?.userId;
+      const priceId = fullSession.line_items?.data?.[0]?.price?.id;
+
+      // Find matching plan and create/update subscription
+      const latestPlans = await this.planService.getLatestVersion();
+      const plansData = JSON.parse(latestPlans.plans);
+      const matchingPlan = plansData.plans.find(p => p.priceId === priceId);
+      // ... create or update subscription
+      break;
+
+    case 'subscription_schedule.updated':
+      // Update scheduled plan change info
+      break;
+
+    case 'subscription_schedule.released':
+      // Clear scheduled change fields
+      break;
+  }
+  return { received: true };
+}
+\end{lstlisting}
+
+\subsubsection{Subscription Management}
+
+\noindent\textbf{Subscription Schema}\\
+
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Schema (Key Fields)}]
+export class Subscription extends Document {
+  @Prop({ required: true, ref: User.name, type: ObjectId })
+  user: string | User;
+
+  @Prop({ type: String }) stripeSubscriptionId?: string;
+  @Prop({ type: String }) stripeCustomerId?: string;
+  @Prop({ type: String }) planName?: string;
+  @Prop({ type: String }) priceId?: string;
+  @Prop({ type: String }) planId?: string;
+
+  // Scheduled change fields (for plan upgrades/downgrades)
+  @Prop({ type: String }) scheduledPriceId?: string;
+  @Prop({ type: String }) scheduledPlanId?: string;
+  @Prop({ type: String }) scheduledPlanName?: string;
+  @Prop({ type: String }) stripeScheduleId?: string;
+
+  @Prop({ type: String, enum: ['active', 'canceled', ...], default: 'active' })
+  status: string;
+
+  @Prop(raw({ batchDuration: Number, liveDuration: Number }))
+  quota: SubscriptionUnit;
+
+  @Prop(raw({ batchDuration: Number, liveDuration: Number }))
+  usage: SubscriptionUnit;
+
+  @Prop({ type: Date }) startDate: Date;
+  @Prop({ type: Date }) endDate: Date;
+}
+\end{lstlisting}
+
+\noindent\textbf{Quota Checking}\\
+
+Figure~\ref{fig:subscription_quota_check} illustrates the subscription and quota validation flow.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/subscription_quota_check.png}
+\caption{Subscription Quota Checking Flow}
+\label{fig:subscription_quota_check}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, caption={Subscription Validation}]
+async checkSubscription(userId: string, speechType?: 'live' | 'batch') {
+  const sub = await this.subscriptionModel.findOne({ user: userId }).exec();
+
+  if (!sub) return { success: false, message: 'User has no subscription' };
+
+  if (speechType === 'batch' && sub.quota.batchDuration !== -1 &&
+      sub.usage.batchDuration > sub.quota.batchDuration) {
+    return { success: false, message: 'Batch quota exceeded' };
+  }
+
+  return { success: true, subscription: sub };
+}
+\end{lstlisting}
+
+\subsubsection{Stripe Price Caching}
+
+Figure~\ref{fig:stripe_price_caching} shows the price caching mechanism with cache penetration protection.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{images/stripe_price_caching.png}
+\caption{Stripe Price Caching with Penetration Protection}
+\label{fig:stripe_price_caching}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, caption={Stripe Price Caching}]
+async getPrice(priceId: string): Promise<Stripe.Price> {
+  const cacheKey = `stripe:price:${priceId}`;
+  const cached = await this.redisClient.get(cacheKey);
+
+  if (cached) {
+    if (cached === 'NULL') throw new Error('Price not found (cached)');
+    return JSON.parse(cached) as Stripe.Price;
+  }
+
+  try {
+    const price = await this.stripe.prices.retrieve(priceId);
+    await this.redisClient.set(cacheKey, JSON.stringify(price), {
+      EX: this.CACHE_TTL, // 24 hours
+    });
+    return price;
+  } catch (error) {
+    if (error?.code === 'resource_missing') {
+      await this.redisClient.set(cacheKey, 'NULL', { EX: 60 });
+    }
+    throw error;
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Module Dependencies}
+
+The Stripe module integrates with Subscription and Plan modules:
+
+\begin{lstlisting}[language=TypeScript, caption={Stripe Module Configuration}]
+@Module({
+  imports: [
+    StripeConfigurationModule,
+    MongooseModule.forFeature([
+      { name: Subscription.name, schema: SubscriptionSchema },
+      { name: Plan.name, schema: PlanSchema },
+    ]),
+  ],
+  controllers: [StripeController],
+  providers: [StripeService, SubscriptionService, PlanService],
+  exports: [StripeService],
+})
+export class StripeModule {}
+\end{lstlisting}

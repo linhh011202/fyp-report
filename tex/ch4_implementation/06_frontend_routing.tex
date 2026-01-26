@@ -3,7 +3,7 @@
 
 Vue Router manages navigation with guards that enforce authentication and role-based access control.
 
-\subsection{Route Configuration}
+\subsubsection{Route Configuration}
 
 Routes are categorized by authentication requirements:
 
@@ -44,7 +44,7 @@ Routes are categorized by authentication requirements:
 \label{tab:route_definitions}
 \end{table}
 
-\subsection{Navigation Guards Flow}
+\subsubsection{Navigation Guards Flow}
 
 Figure~\ref{fig:frontend_navigation_guards} illustrates the navigation guard logic.
 
@@ -55,11 +55,11 @@ Figure~\ref{fig:frontend_navigation_guards} illustrates the navigation guard log
 \label{fig:frontend_navigation_guards}
 \end{figure}
 
-\subsection{Guard Implementation}
+\subsubsection{Guard Implementation}
 
 Two navigation guards work together:
 
-\subsubsection{Session Guard}
+\noindent\textbf{Session Guard}
 
 Ensures user data is loaded before navigation:
 
@@ -77,7 +77,7 @@ export const ensureSession = router => async (to, from, next) => {
 }
 \end{lstlisting}
 
-\subsubsection{Auth Guard}
+\noindent\textbf{Auth Guard}
 
 Enforces authentication and admin requirements:
 
@@ -101,7 +101,7 @@ export const ensureSignedIn = router => (to, from, next) => {
 }
 \end{lstlisting}
 
-\subsection{HTTP Interceptors}
+\subsubsection{HTTP Interceptors}
 
 Figure~\ref{fig:frontend_http_interceptor} shows the HTTP interceptor flow for automatic token handling.
 

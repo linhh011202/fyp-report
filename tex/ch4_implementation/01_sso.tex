@@ -1,11 +1,221 @@
-\section{SSO Implementation}%
+\subsection{SSO Implementation}%
 \label{sec:sso}
 
-This section provides a comprehensive examination of the authentication system implemented in the Gateway Dashboard. It covers the supported authentication methods, detailed flow diagrams, token lifecycle management, and session security mechanisms.
+This subsection provides a comprehensive examination of the authentication system implemented in the Gateway Dashboard. It covers the supported authentication methods, detailed flow descriptions, and key implementation details.
 
-% TODO: Add SSO implementation content here
-% The following files were referenced but do not exist:
-% - tex/ch3_authentication/01_overview
-% - tex/ch3_authentication/02_auth_flows
-% - tex/ch3_authentication/03_token_management
-% - tex/ch3_authentication/04_session_security
+\subsubsection{Overview}
+
+The Gateway Dashboard supports three authentication methods:
+\begin{itemize}
+    \item \textbf{Google OAuth 2.0}: Full OAuth flow with Passport.js strategy
+    \item \textbf{Apple Sign-In}: POST callback with JWT token verification
+    \item \textbf{Traditional Email/Password}: bcrypt-hashed credentials
+\end{itemize}
+
+Figure~\ref{fig:sso_architecture} illustrates the SSO architecture showing how both providers integrate with the AuthService.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/sso_architecture.png}
+\caption{SSO Authentication Architecture}
+\label{fig:sso_architecture}
+\end{figure}
+
+Both SSO providers share a common flow: after identity verification, the system checks if the user exists. For new users, a temporary token is generated requiring password setup; for existing users, an access token is issued directly.
+
+\subsubsection{Google OAuth 2.0 Implementation}
+
+Google SSO uses the \texttt{passport-google-oauth20} strategy integrated with NestJS guards.
+
+\noindent\textbf{Google OAuth Flow}\\
+
+Figure~\ref{fig:google_sso_oauth_flow} shows the complete OAuth flow including state parameter handling.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/google_sso_oauth_flow.png}
+\caption{Google OAuth 2.0 Authentication Flow}
+\label{fig:google_sso_oauth_flow}
+\end{figure}
+
+\noindent\textbf{Google Strategy}\\
+
+The strategy is configured with OAuth credentials and requests email and profile scopes:
+
+\begin{lstlisting}[language=TypeScript, caption={Google Strategy Configuration}]
+@Injectable()
+export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  constructor(
+    @Inject(authConfig.KEY)
+    private auth: ConfigType<typeof authConfig>,
+  ) {
+    super({
+      clientID: auth.googleClientId,
+      clientSecret: auth.googleClientSecret,
+      callbackURL: auth.googleCallbackURL,
+      scope: ['email', 'profile'],
+      passReqToCallback: true,
+    })
+  }
+
+  async validate(
+    req: any,
+    accessToken: string,
+    _refreshToken: string,
+    profile: any,
+    done: VerifyCallback,
+  ): Promise<any> {
+    const { name, emails, photos } = profile
+    const user = {
+      email: emails[0].value,
+      firstName: name.givenName,
+      lastName: name.familyName,
+      picture: photos[0].value,
+      accessToken,
+    }
+    done(null, user)
+  }
+}
+\end{lstlisting}
+
+\noindent\textbf{State Parameter for CSRF Protection}\\
+
+Figure~\ref{fig:google_sso_state_flow} illustrates how state parameters are preserved through the OAuth redirect.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/google_sso_state_flow.png}
+\caption{State Parameter Encoding Flow}
+\label{fig:google_sso_state_flow}
+\end{figure}
+
+The \texttt{GoogleAuthGuard} encodes query parameters into a base64 state parameter:
+
+\begin{lstlisting}[language=TypeScript, caption={Google Auth Guard with State Encoding}]
+@Injectable()
+export class GoogleAuthGuard extends AuthGuard('google') {
+  getAuthenticateOptions(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest()
+    const { redirect, appId, appSecret, prompt } = request.query
+
+    // Encode query parameters into state to preserve them through OAuth flow
+    const state = JSON.stringify({
+      redirect: redirect || null,
+      appId: appId || null,
+      appSecret: appSecret || null,
+    })
+
+    return {
+      state: Buffer.from(state).toString('base64'),
+      prompt: prompt || 'select_account', // Force account selection
+      access_type: 'offline', // For refresh tokens
+    }
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Apple Sign-In Implementation}
+
+Figure~\ref{fig:auth_apple_flow} shows the Apple Sign-In flow which uses POST callback instead of redirect-based OAuth.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/auth_apple_flow.png}
+\caption{Apple Sign-In Authentication Flow}
+\label{fig:auth_apple_flow}
+\end{figure}
+
+\noindent\textbf{Token Verification}\\
+
+Apple tokens are verified using the \texttt{apple-signin-auth} library with fallback to manual verification:
+
+\begin{lstlisting}[language=TypeScript, caption={Apple SSO Controller}]
+@Controller('auth/apple')
+export class AppleSSOController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('callback')
+  async appleAuthCallback(@Body() body: AppleAuthDto, @Res() res: Response) {
+    if (!body.code && !body.id_token) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        message: 'Apple authentication failed: No id_token received',
+      })
+    }
+
+    let appleResponse
+    try {
+      appleResponse = await appleSignin.verifyIdToken(body.id_token, {
+        audience: process.env.APPLE_CLIENT_ID,
+        ignoreExpiration: false,
+      })
+    } catch (verifyError) {
+      // Fallback to manual verification
+      appleResponse = await this.authService.verifyAppleToken(body.id_token)
+    }
+
+    const result = await this.authService.checkUserByEmail(appleResponse.email)
+    // Handle new/existing user and redirect
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Token Management}
+
+Figure~\ref{fig:token_lifecycle} illustrates the complete token lifecycle from generation to revocation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/token_lifecycle.png}
+\caption{JWT Token Lifecycle Management}
+\label{fig:token_lifecycle}
+\end{figure}
+
+When users authenticate via SSO:
+
+\begin{enumerate}
+    \item \textbf{New Users}: A 15-minute temporary JWT is generated with \texttt{need\_password: true}. The frontend redirects to \texttt{/complete-signup} where the user sets a password.
+    \item \textbf{Existing Users}: All previous tokens are revoked (single-session policy), a new JWT is issued, and stored in the \texttt{usertokens} collection.
+    \item \textbf{Token Revocation}: On new login, all active tokens are blacklisted in \texttt{tokenblacklists} collection.
+\end{enumerate}
+
+\noindent\textbf{Token Blacklisting Flow}\\
+
+Figure~\ref{fig:token_blacklist_flow} shows how tokens are blacklisted for security.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/token_blacklist_flow.png}
+\caption{Token Blacklisting Flow}
+\label{fig:token_blacklist_flow}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, caption={Temporary Token Generation}]
+async generateTemporaryToken(email: string, appId?: string): Promise<string> {
+  const payload = {
+    email: email.toLowerCase(),
+    need_password: true,
+    appId: appId || null,
+  }
+  return this.jwtService.sign(payload, { expiresIn: '15m' })
+}
+\end{lstlisting}
+
+\subsubsection{Module Structure}
+
+Figure~\ref{fig:google_sso_module_structure} shows the Google SSO module organization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/google_sso_module_structure.png}
+\caption{Google SSO Module Structure}
+\label{fig:google_sso_module_structure}
+\end{figure}
+
+The SSO modules are organized as independent NestJS modules:
+
+\begin{itemize}
+    \item \texttt{GoogleSSOModule}: Imports \texttt{PassportModule}, \texttt{AuthModule}; provides \texttt{GoogleStrategy}
+    \item \texttt{AppleSSOModule}: Imports \texttt{AuthModule}; uses \texttt{apple-signin-auth} library
+\end{itemize}
+
+Both modules delegate user creation and authentication logic to the shared \texttt{AuthService}.

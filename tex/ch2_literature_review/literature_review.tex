@@ -1,0 +1,160 @@
+\chapter{Literature Review}
+\label{chap:literature_review}
+
+This chapter examines the key technology decisions for the Gateway Dashboard, focusing on SSO provider selection, payment platform comparison, Redis caching importance, and token management strategies.
+
+\section{SSO Provider Selection}
+
+The Gateway Dashboard implements Google and Apple SSO as primary authentication methods.
+
+\subsection{SSO Provider Comparison}
+
+Table~\ref{tab:sso_comparison} compares major SSO providers:
+
+\begin{table}[H]
+\centering
+\caption{SSO Provider Comparison}
+\label{tab:sso_comparison}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Provider} & \textbf{Market Share} & \textbf{Key Advantage} & \textbf{Status} \\ \hline
+Google & 71\% (Android) & 2B+ users, mature API & \textbf{Implemented} \\ \hline
+Apple & 28\% (iOS) & Privacy-focused, email relay & \textbf{Implemented} \\ \hline
+Microsoft & Enterprise strong & Azure AD integration & Other dev \\ \hline
+Facebook & 2.9B users & Large user base & Excluded (privacy) \\ \hline
+GitHub & Developer focus & Dev community & Not needed \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Why Google and Apple}
+
+\textbf{Selection Rationale:}
+\begin{enumerate}
+    \item \textbf{Market Coverage:} 95\%+ of internet users have Google or Apple accounts \cite{statista2023accounts, statcounter2023mobile}
+    \item \textbf{User Convenience:} Eliminates credential fatigue; most developers already have these accounts
+    \item \textbf{Technical Maturity:} Robust OAuth 2.0 implementations with 99.9\%+ uptime \cite{google2023oauth, apple2023signin}
+    \item \textbf{Team Division:} Microsoft SSO handled by another developer, avoiding duplicate work
+    \item \textbf{Security:} Both provide 2FA, fraud detection, and privacy features
+\end{enumerate}
+
+\section{Payment Platform Selection: Stripe vs PayPal}
+
+\subsection{Comparison Overview}
+
+Table~\ref{tab:payment_comparison} compares Stripe and PayPal:
+
+\begin{table}[H]
+\centering
+\caption{Stripe vs PayPal Comparison}
+\label{tab:payment_comparison}
+\begin{tabular}{|p{3cm}|p{5cm}|p{5cm}|}
+\hline
+\textbf{Criteria} & \textbf{Stripe} & \textbf{PayPal} \\ \hline
+\textbf{Transaction Fee} & 2.9\% + \$0.30 & 2.9\% + \$0.30 \\ \hline
+\textbf{API Quality} & RESTful, excellent docs \cite{stripe2023docs} & Complex multi-generation APIs \\ \hline
+\textbf{Checkout Flow} & Embedded (no redirect) & Redirect-based (-10-15\% conversion) \cite{baymard2020checkout} \\ \hline
+\textbf{Subscriptions} & Native billing, prorated upgrades \cite{stripe2023billing} & Limited flexibility \\ \hline
+\textbf{Webhooks} & Auto-retry, signature verification \cite{sohan2017webhook} & Basic webhook support \\ \hline
+\textbf{Integration Time} & 40\% faster \cite{herzberg2019payment} & Slower, complex documentation \\ \hline
+\textbf{Developer Focus} & \checkmark Strong & Limited \\ \hline
+\textbf{Metered Billing} & \checkmark Supported & Not supported \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Why Stripe}
+
+\textbf{Decision:} Stripe chosen for:
+\begin{itemize}
+    \item \textbf{Subscription Requirements:} Native support for tiered plans, quotas, prorated changes, automated renewals
+    \item \textbf{Developer Experience:} Superior API design, documentation, official SDK for Node.js
+    \item \textbf{Embedded Checkout:} Maintains user context, better conversion rates
+    \item \textbf{Webhook Reliability:} Ensures payment-database consistency with idempotency
+    \item \textbf{Target Audience:} Developers value functionality over PayPal's consumer brand
+\end{itemize}
+
+\section{Redis Caching: Critical Importance}
+
+Redis is essential for both \textbf{performance} and \textbf{security} in the Gateway Dashboard.
+
+\subsection{Redis Use Cases}
+
+Table~\ref{tab:redis_usage} summarizes Redis applications:
+
+\begin{table}[H]
+\centering
+\caption{Redis Usage in Gateway Dashboard}
+\label{tab:redis_usage}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Use Case} & \textbf{Purpose} & \textbf{Performance Gain} & \textbf{TTL} \\ \hline
+Plan Caching & Reduce DB load & 95\%+ load reduction & 1 hour \\ \hline
+Stripe Price Caching & Minimize API calls & Sub-ms retrieval & 1 hour \\ \hline
+Token Blacklist & Immediate revocation & <1ms lookup & Token expiry \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Why Redis is Critical}
+
+\begin{enumerate}
+    \item \textbf{Performance:} Sub-millisecond access times \cite{carlson2013redis}, in-memory storage
+    \item \textbf{Scalability:} Handles millions of requests/second, horizontally scalable
+    \item \textbf{Security:} Enables JWT token blacklisting for immediate logout/revocation
+    \item \textbf{Database Protection:} Shields MongoDB from read-heavy workloads (99\% read, 1\% write)
+    \item \textbf{Cache Strategy:} Cache-aside pattern \cite{fowler2003patterns} with automatic invalidation
+    \item \textbf{Persistence:} RDB snapshots prevent data loss during restarts
+\end{enumerate}
+
+\textbf{Implementation:} Cache warming on startup, automatic invalidation on plan updates, TTL-based expiration.
+
+\section{Token Management Strategy}
+
+Token management balances \textbf{security}, \textbf{scalability}, and \textbf{user experience}.
+
+\subsection{Token Architecture}
+
+Table~\ref{tab:token_management} details the token strategy:
+
+\begin{table}[H]
+\centering
+\caption{Token Management Strategy}
+\label{tab:token_management}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Feature} & \textbf{Implementation} & \textbf{Purpose} \\ \hline
+Access Token & JWT, 15-min expiry & Minimize compromise window \cite{lodderstedt2013oauth} \\ \hline
+Refresh Token & 7-day expiry, rotation & Seamless re-auth \cite{siriwardena2020advanced} \\ \hline
+Blacklisting & Redis-based & Immediate revocation \\ \hline
+Cookie Storage & HttpOnly, Secure, SameSite & XSS/CSRF protection \cite{barth2008securing} \\ \hline
+Stateless Auth & JWT self-contained & Horizontal scalability \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Why This Approach}
+
+\begin{itemize}
+    \item \textbf{Stateless Scalability:} JWTs don't require DB lookup on every request \cite{jones2015json}
+    \item \textbf{Security Layers:} Short-lived tokens + blacklist + secure cookies
+    \item \textbf{User Experience:} Automatic refresh = no frequent logins
+    \item \textbf{Immediate Revocation:} Redis blacklist solves JWT's "can't revoke" problem
+    \item \textbf{Performance:} Sub-millisecond blacklist checks, no DB bottleneck
+\end{itemize}
+
+\section{Summary}
+
+Table~\ref{tab:technology_summary} summarizes key technology decisions:
+
+\begin{table}[H]
+\centering
+\caption{Technology Decision Summary}
+\label{tab:technology_summary}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Component} & \textbf{Choice} & \textbf{Key Reason} \\ \hline
+SSO Providers & Google + Apple & 95\%+ user coverage, Microsoft by other dev \\ \hline
+Payment & Stripe & Better API, subscriptions, webhooks vs PayPal \\ \hline
+Caching & Redis & Performance (sub-ms) + security (blacklist) \\ \hline
+Token Strategy & JWT + Redis blacklist & Stateless scalability + immediate revocation \\ \hline
+\end{tabular}
+\end{table}
+
+\textbf{Core Principles:} All choices prioritize developer experience, security, performance, and scalability for the API management domain.

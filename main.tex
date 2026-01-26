@@ -46,19 +46,14 @@
   commentstyle=\color{gray},
   stringstyle=\color{orange}
 }
-\usepackage{biblatex}
 \usepackage{blindtext}
-\usepackage{csquotes}
 \usepackage{makecell}
 \usepackage[smartEllipses, pipeTables]{markdown}
 \addbibresource{reference.bib}
-\usepackage{geometry}
 \usepackage[normalem]{ulem}
 \useunder{\uline}{\ul}{}
 \usepackage{lscape}
 \usepackage{longtable}
-\usepackage[utf8]{inputenc}
-\usepackage{listings}
 
 
 \begin{document}
@@ -66,8 +61,8 @@
 \input{before_main/title}
 
 % Front matter in standard academic order
-\input{tex/abstract}
-\input{tex/acknowledgement}
+\input{tex/00_frontmatter/abstract}
+\input{tex/00_frontmatter/acknowledgement}
 
 \tableofcontents{}
 
@@ -79,15 +74,13 @@
 \pagebreak
 
 % Main chapters
-\input{tex/intro}
-\input{tex/literature_review}
-\input{tex/ch2_architecture}
-\input{tex/ch3_authentication}
-\input{tex/ch4_payment}
-\input{tex/ch5_frontend}
-\input{tex/ch6_conclusion}
-% MAIN TEX HERE
-% END MAIN TEXT HERE
+\input{tex/ch1_introduction/ch1_introduction}
+\input{tex/ch2_literature_review/ch2_literature_review}
+\input{tex/ch3_architecture/ch3_architecture}
+\input{tex/ch4_implementation/ch4_implementation}
+\input{tex/ch5_frontend/ch5_frontend}
+\input{tex/ch6_conclusion/ch6_conclusion}
+
 \printbibliography
 \appendix
 \input{tex/appendix/appendix1}

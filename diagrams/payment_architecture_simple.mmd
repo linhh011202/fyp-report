@@ -1,0 +1,45 @@
+graph TB
+    subgraph Client["Client Layer"]
+        WebBrowser["Web Browser"]
+    end
+
+    subgraph Backend["Backend Services"]
+        PlanMgmt["Plan Management"]
+        SubTracking["Subscription Tracking"]
+        PaymentProc["Payment Processing"]
+    end
+
+    subgraph External["External Services"]
+        Stripe["Stripe Payment Gateway"]
+    end
+
+    subgraph Data["Data Storage"]
+        MongoDB["MongoDB Database"]
+        Redis["Redis Cache"]
+    end
+
+    WebBrowser -->|Plans data| PlanMgmt
+    WebBrowser -->|Subscription records| SubTracking
+    WebBrowser -->|Payment requests| PaymentProc
+
+    PlanMgmt -->|Store/retrieve| MongoDB
+    SubTracking -->|Store/retrieve| MongoDB
+    PaymentProc -->|Process payments| Stripe
+
+    Stripe -->|Webhooks| SubTracking
+    Stripe -->|Webhooks| PaymentProc
+
+    PlanMgmt -->|Cache| Redis
+    SubTracking -->|Cache| Redis
+
+    style WebBrowser fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style PlanMgmt fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style SubTracking fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style PaymentProc fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style Stripe fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style MongoDB fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style Redis fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style Client fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style Backend fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style External fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style Data fill:#E3F2FD,stroke:#1565C0,stroke-width:2px

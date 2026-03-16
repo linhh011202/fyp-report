@@ -1,0 +1,72 @@
+graph TB
+    subgraph "👤 Users"
+        U["🌐 Web Browser"]
+    end
+
+    subgraph "Frontend Layer — Vue.js 3 + Vuetify"
+        FE["📱 Gateway Dashboard SPA"]
+        FR["🔀 Vue Router — Navigation Guards"]
+        FS["📡 Services Layer — Axios HTTP Client"]
+    end
+
+    subgraph "Backend Layer — NestJS + TypeScript"
+        API["🔧 API Gateway"]
+        AUTH["🔐 Auth Module"]
+        SSO_G["🔵 Google SSO Module"]
+        SSO_A["🍎 Apple SSO Module"]
+        STRIPE["💳 Stripe Module"]
+        SUB["📋 Subscription Module"]
+        PLAN["📊 Plan Module"]
+    end
+
+    subgraph "Data Layer"
+        MONGO[("🗄️ MongoDB — Persistent Storage")]
+        REDIS[("⚡ Redis — Cache & Session")]
+    end
+
+    subgraph "External Services"
+        GOOGLE["🔵 Google OAuth 2.0"]
+        APPLE["🍎 Apple Sign-In"]
+        STRIPE_EXT["💳 Stripe Payment Gateway"]
+    end
+
+    U --> FE
+    FE --> FR
+    FR --> FS
+    FS -->|"REST API"| API
+
+    API --> AUTH
+    API --> STRIPE
+    API --> SUB
+    API --> PLAN
+
+    AUTH --> SSO_G
+    AUTH --> SSO_A
+
+    SSO_G -->|"OAuth 2.0"| GOOGLE
+    SSO_A -->|"Token Verify"| APPLE
+    STRIPE -->|"Checkout & Webhooks"| STRIPE_EXT
+
+    AUTH --> MONGO
+    AUTH --> REDIS
+    SUB --> MONGO
+    PLAN --> MONGO
+    PLAN --> REDIS
+    STRIPE --> MONGO
+
+    style U fill:#E3F2FD,stroke:#1565C0
+    style FE fill:#E8F5E9,stroke:#2E7D32
+    style FR fill:#E8F5E9,stroke:#2E7D32
+    style FS fill:#E8F5E9,stroke:#2E7D32
+    style API fill:#FFF3E0,stroke:#E65100
+    style AUTH fill:#FFF3E0,stroke:#E65100
+    style SSO_G fill:#FFF3E0,stroke:#E65100
+    style SSO_A fill:#FFF3E0,stroke:#E65100
+    style STRIPE fill:#FFF3E0,stroke:#E65100
+    style SUB fill:#FFF3E0,stroke:#E65100
+    style PLAN fill:#FFF3E0,stroke:#E65100
+    style MONGO fill:#F3E5F5,stroke:#6A1B9A
+    style REDIS fill:#FCE4EC,stroke:#C62828
+    style GOOGLE fill:#E3F2FD,stroke:#1565C0
+    style APPLE fill:#F5F5F5,stroke:#424242
+    style STRIPE_EXT fill:#EDE7F6,stroke:#4527A0

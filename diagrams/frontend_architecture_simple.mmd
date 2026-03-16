@@ -1,0 +1,56 @@
+flowchart TB
+    subgraph UI["User Interface"]
+        P1["Login Page"]
+        P2["Dashboard Page"]
+        P3["Subscription Page"]
+        P4["Admin Page"]
+    end
+
+    subgraph NAV["Navigation Layer"]
+        ROUTER["Router with Access Control"]
+    end
+
+    subgraph LOGIC["Business Logic"]
+        AUTH["Authentication Service"]
+        SUB["Subscription Service"]
+        PLAN["Plan Service"]
+    end
+
+    subgraph COMM["Communication"]
+        HTTP["HTTP Client"]
+    end
+
+    subgraph BACKEND["Server"]
+        API["Backend API"]
+    end
+
+    P1 --> ROUTER
+    P2 --> ROUTER
+    P3 --> ROUTER
+    P4 --> ROUTER
+
+    ROUTER --> AUTH
+    ROUTER --> SUB
+    ROUTER --> PLAN
+
+    AUTH --> HTTP
+    SUB --> HTTP
+    PLAN --> HTTP
+
+    HTTP --> API
+
+    style UI fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style P1 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style P2 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style P3 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style P4 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style NAV fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style ROUTER fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style LOGIC fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style AUTH fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style SUB fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style PLAN fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style COMM fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style HTTP fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style BACKEND fill:#F5F5F5,stroke:#616161,stroke-width:2px
+    style API fill:#F5F5F5,stroke:#616161,stroke-width:2px

@@ -1,0 +1,42 @@
+flowchart TD
+    START["User Navigates to Page"]
+
+    Q1{"Is this a<br/>public page?"}
+
+    ALLOW1["Allow Access"]
+
+    Q2{"Is user<br/>logged in?"}
+
+    REDIRECT1["Redirect to Sign In"]
+
+    Q3{"Does page<br/>require admin role?"}
+
+    Q4{"Is user<br/>an admin?"}
+
+    REDIRECT2["Redirect to Dashboard"]
+
+    ALLOW2["Allow Access"]
+
+    START --> Q1
+
+    Q1 -->|Yes| ALLOW1
+    Q1 -->|No| Q2
+
+    Q2 -->|No| REDIRECT1
+    Q2 -->|Yes| Q3
+
+    Q3 -->|No| ALLOW2
+    Q3 -->|Yes| Q4
+
+    Q4 -->|No| REDIRECT2
+    Q4 -->|Yes| ALLOW2
+
+    style START fill:#F5F5F5,stroke:#616161,stroke-width:2px
+    style Q1 fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style ALLOW1 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style Q2 fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style REDIRECT1 fill:#FCE4EC,stroke:#C62828,stroke-width:2px
+    style Q3 fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style Q4 fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style REDIRECT2 fill:#FCE4EC,stroke:#C62828,stroke-width:2px
+    style ALLOW2 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px

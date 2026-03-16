@@ -1,11 +1,11 @@
 \subsection{Routing and Navigation}
 \label{sec:frontend_routing}
 
-Vue Router 4 manages navigation with global navigation guards that enforce authentication and role-based access control. The routing system uses the Composition API pattern with dependency injection for state management.
+Vue Router manages navigation throughout the application and enforces access control constraints. The routing system ensures that users can only access pages appropriate for their authentication status and role, with automatic redirection when access is denied.
 
 \subsubsection{Route Configuration}
 
-Routes are defined with meta fields that specify authentication and authorization requirements:
+The application defines a set of routes corresponding to different pages and features. Each route specifies whether authentication is required and whether administrative privileges are necessary.
 
 \begin{table}[H]
 \centering
@@ -45,8 +45,6 @@ Routes are defined with meta fields that specify authentication and authorizatio
 \hline
 /request-log & Yes & Yes & RequestLog.vue \\
 \hline
-/request-log/:reqId & Yes & Yes & RequestLogDetail.vue \\
-\hline
 /settings & Yes & Yes & Settings.vue \\
 \hline
 \end{tabular}
@@ -54,330 +52,32 @@ Routes are defined with meta fields that specify authentication and authorizatio
 \label{tab:route_definitions}
 \end{table}
 
-\paragraph{Router Instance}
+Routes marked as requiring authentication cannot be accessed by unauthenticated users. Admin-only routes redirect non-administrative users to the regular dashboard.
 
-The router is created with Vue Router 4 syntax using \texttt{createRouter} and \texttt{createWebHistory}:
+\subsubsection{Navigation Guards}
 
-\begin{lstlisting}[language=JavaScript, caption={Router Configuration}]
-import { createRouter, createWebHistory } from 'vue-router'
-import { ensureSession, ensureSignedIn } from './hooks'
-
-const routes = [
-  {
-    path: '/',
-    name: 'Dashboard',
-    component: () => import('@/views/dashboard/Dashboard.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true
-    }
-  },
-  {
-    path: '/speeches',
-    name: 'Speeches',
-    component: () => import('@/views/Speeches.vue'),
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: '/subscription',
-    name: 'Subscription',
-    component: () => import('@/views/Subscription.vue'),
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: '/sign-in',
-    name: 'SignIn',
-    component: () => import('@/views/SignIn.vue'),
-    meta: {
-      requiresAuth: false
-    }
-  },
-  // Vue Router 4 catch-all syntax
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'NotFound',
-    redirect: '/'
-  }
-]
-
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes
-})
-
-// Global navigation guards
-router.beforeEach(ensureSession)
-router.beforeEach(ensureSignedIn)
-
-export default router
-\end{lstlisting}
-
-\subsubsection{Navigation Guards Flow}
-
-Figure~\ref{fig:frontend_navigation_guards} illustrates the navigation guard logic.
+Navigation guards are global checks that run before every page transition, ensuring users can only access pages they are authorised to view. Figure~\ref{fig:navigation_guard_simple} illustrates this decision process.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.5\textwidth]{images/frontend_navigation_guards.png}
-\caption{Navigation Guards Flow}
-\label{fig:frontend_navigation_guards}
+\includegraphics[width=0.7\textwidth]{images/navigation_guard_simple.png}
+\caption{Navigation Guard Decision Flow}
+\label{fig:navigation_guard_simple}
 \end{figure}
 
-\subsubsection{Guard Implementation}
+The guard evaluates three conditions in sequence. First, it checks whether the requested page is public (such as the sign-in or sign-up page)---if so, access is granted immediately. Second, for protected pages, it verifies that the user is logged in; if not, the user is redirected to the sign-in page. Third, for admin-only pages, it checks whether the logged-in user has administrator privileges; non-admin users are redirected to the regular dashboard. This layered approach ensures that every navigation action is validated before the page loads.
 
-The navigation guards use dependency injection to access global state and methods. Dependencies are set during app initialization in \texttt{main.js}.
+\subsubsection{Automatic Token Management}
 
-\paragraph{Dependency Injection Pattern}
-
-Guards receive dependencies from the main app:
-
-\begin{lstlisting}[language=JavaScript, caption={Setting Router Dependencies}]
-// In main.js
-import { setRouterDependencies } from './router/hooks'
-
-const globalState = createGlobalState()
-const globalMethods = { getCurrentUser, logout, ... }
-
-// Inject dependencies into router hooks
-setRouterDependencies(globalState, globalMethods)
-\end{lstlisting}
-
-\paragraph{Session Guard}
-
-The \texttt{ensureSession} guard loads user data before navigation:
-
-\begin{lstlisting}[language=JavaScript, caption={Session Guard Implementation}]
-import { nextTick } from 'vue'
-
-let globalState = null
-let globalMethods = null
-
-export function setRouterDependencies(state, methods) {
-  globalState = state
-  globalMethods = methods
-}
-
-export const ensureSession = async (to, from, next) => {
-  await nextTick()
-
-  if (!globalState || !globalMethods) {
-    next()
-    return
-  }
-
-  if (!globalState.user && to.name !== 'SignIn') {
-    // Load user data from JWT
-    const user = await globalMethods.getCurrentUser()
-    if (user) {
-      to.meta.isSignedIn = true
-      next()
-    } else {
-      to.meta.isSignedIn = false
-      next()
-    }
-  } else {
-    to.meta.isSignedIn = globalState.user !== null
-    next()
-  }
-}
-\end{lstlisting}
-
-\paragraph{Authentication Guard}
-
-The \texttt{ensureSignedIn} guard enforces authentication and role requirements:
-
-\begin{lstlisting}[language=JavaScript, caption={Auth Guard Implementation}]
-function anyTrue(to, prop) {
-  return to.matched.findIndex(item => item.meta[prop]) !== -1
-}
-
-export const ensureSignedIn = (to, from, next) => {
-  if (!globalState) {
-    next()
-    return
-  }
-
-  const requiresAdmin = anyTrue(to, 'requiresAdmin')
-  const requiresAuth = requiresAdmin ? true : anyTrue(to, 'requiresAuth')
-
-  if (requiresAuth) {
-    const { isSignedIn } = to.meta
-
-    if (isSignedIn) {
-      if (requiresAdmin) {
-        const isAdmin = globalState.user?.role === 'admin'
-
-        if (isAdmin) {
-          next()
-        } else {
-          // Redirect non-admin users to Speeches page
-          next({ name: 'Speeches' })
-        }
-      } else {
-        next()
-      }
-    } else {
-      // Redirect unauthenticated users to sign-in
-      next({ name: 'SignIn' })
-    }
-  } else {
-    next()
-  }
-}
-\end{lstlisting}
-
-\subsubsection{HTTP Interceptors}
-
-Figure~\ref{fig:frontend_http_interceptor} shows the HTTP interceptor flow for automatic token handling.
+The frontend automatically manages authentication tokens on all API requests, ensuring seamless operation without manual intervention. Figure~\ref{fig:token_auto_refresh_simple} illustrates how this mechanism works.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.9\textwidth]{images/frontend_http_interceptor.png}
-\caption{HTTP Interceptor Flow with Token Refresh}
-\label{fig:frontend_http_interceptor}
+\includegraphics[width=0.7\textwidth]{images/token_auto_refresh_simple.png}
+\caption{Automatic Token Refresh Mechanism}
+\label{fig:token_auto_refresh_simple}
 \end{figure}
 
-\paragraph{Axios Instance Configuration}
+When any page makes a request to the backend, the system automatically attaches the user's authentication token. If the backend accepts the request, the data is returned normally. However, if the token has expired, the system detects the authentication error and automatically attempts to obtain a fresh token from the backend. If the refresh succeeds, the original request is retried transparently---the user never notices the interruption. If the refresh fails (for example, because the user's session was revoked), the system clears all stored credentials and redirects the user to the sign-in page.
 
-The Axios instance is configured with base URL and default headers:
-
-\begin{lstlisting}[language=JavaScript, caption={Axios HTTP Client Setup}]
-import axios from 'axios'
-import router from './router'
-import authService from './services/auth.service'
-
-const baseURL = import.meta.env.VITE_GATEWAY_URL
-
-const http = axios.create({
-  baseURL,
-  headers: {
-    Authorization: `Bearer ${authService.getAccessToken()}`,
-    'Content-Type': 'application/json'
-  }
-})
-
-// Global state reference (set from main.js)
-let globalState = null
-let globalMethods = null
-
-export function setGlobalState(state, methods) {
-  globalState = state
-  globalMethods = methods
-}
-\end{lstlisting}
-
-\paragraph{Request Interceptor}
-
-Automatically attaches fresh JWT token to every request:
-
-\begin{lstlisting}[language=JavaScript, caption={Request Interceptor}]
-http.interceptors.request.use((config) => {
-  const token = authService.getAccessToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-}, (error) => {
-  return Promise.reject(error)
-})
-\end{lstlisting}
-
-\paragraph{Response Interceptor}
-
-Handles 401 errors with automatic token refresh:
-
-\begin{lstlisting}[language=JavaScript, caption={Response Interceptor with Token Refresh}]
-http.interceptors.response.use((response) => {
-  return response
-}, async (error) => {
-  const originalRequest = error.config
-
-  if (error.response) {
-    if (error.response.status === 401 && 
-        router.currentRoute.value.name !== 'SignIn') {
-      
-      // Try to refresh token (only once per request)
-      if (!originalRequest._retry) {
-        originalRequest._retry = true
-
-        try {
-          const token = authService.getAccessToken()
-          if (token) {
-            const refreshResult = await authService.refreshToken({ token })
-            
-            authService.storeAuthData(
-              refreshResult.accessToken,
-              refreshResult.subscriptionEnd,
-              refreshResult.isVerified
-            )
-
-            // Retry original request with new token
-            originalRequest.headers.Authorization = 
-              `Bearer ${refreshResult.accessToken}`
-            return http(originalRequest)
-          }
-        } catch (refreshError) {
-          // Refresh failed, logout user
-          if (globalState) {
-            globalState.snackbar.message = 
-              'Session expired. Please login again.'
-            globalState.snackbar.isVisible = true
-            globalState.snackbar.color = 'error'
-          }
-          authService.clearAuthData()
-          router.push({ name: 'SignIn' })
-          return Promise.reject(refreshError)
-        }
-      }
-
-      // If retry failed
-      if (globalState) {
-        globalState.snackbar.message = 
-          error.response.data.message || 'Authentication failed'
-        globalState.snackbar.isVisible = true
-        globalState.snackbar.color = 'error'
-      }
-      authService.clearAuthData()
-      router.push({ name: 'SignIn' })
-      return Promise.reject(error)
-    }
-
-    // Handle error messages
-    if (Array.isArray(error.response.data.message)) {
-      if (globalState) {
-        globalState.snackbar.message = error.response.data.message[0]
-      }
-    } else {
-      if (globalState) {
-        globalState.snackbar.message = error.response.data.message
-      }
-    }
-  } else {
-    if (globalState) {
-      globalState.snackbar.message = error.message
-    }
-  }
-
-  if (globalState) {
-    globalState.snackbar.isVisible = true
-    globalState.snackbar.color = 'error'
-  }
-
-  return Promise.reject(error)
-})
-
-export default http
-\end{lstlisting}
-
-The interceptors provide:
-\begin{itemize}
-    \item \textbf{Automatic Token Injection}: Attaches Bearer token to Authorization header
-    \item \textbf{Token Refresh on 401}: Attempts to refresh expired tokens transparently
-    \item \textbf{Retry Mechanism}: Retries original request after successful refresh
-    \item \textbf{Error Handling}: Displays user-friendly error messages in snackbar
-    \item \textbf{Session Management}: Redirects to sign-in when refresh fails
-\end{itemize}
+This approach provides a balance between security and user experience: tokens expire regularly for security purposes, but users are not unnecessarily interrupted unless re-authentication is truly required.

@@ -1,39 +1,36 @@
 \section{Overview}
 \label{sec:arch_overview}
 
-The Gateway Dashboard system follows a modern three-tier architecture consisting of a \textbf{Vue.js} frontend, a \textbf{NestJS} backend API, and integration with external services. This separation of concerns ensures scalability, maintainability, and clear boundaries between presentation, business logic, and data persistence layers.
+The Gateway Dashboard system follows a modern three-tier architecture designed for clarity, scalability, and maintainability. The system separates concerns across three distinct layers: a user-facing frontend built with Vue.js, a business logic layer implemented in NestJS, and a persistent data layer comprising MongoDB and Redis. This separation allows each layer to evolve independently while maintaining clear, well-defined communication boundaries.
 
-\subsection{High-Level Architecture}
+\subsection{Three-Tier Architecture}
 
-Figure~\ref{fig:high_level_arch} illustrates the overall system architecture. The frontend communicates with the backend through RESTful APIs, while the backend interacts with external services such as Stripe for payment processing and OAuth providers for authentication.
+Figure~\ref{fig:system_three_tier} illustrates the three-tier architecture and the external services integrated into the system.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.75\textwidth]{images/architecture_overview.png}
-\caption{High-Level System Architecture}
-\label{fig:high_level_arch}
+\includegraphics[width=0.85\textwidth]{images/system_three_tier.png}
+\caption{Three-Tier System Architecture}
+\label{fig:system_three_tier}
 \end{figure}
 
-The architecture diagram details the data flow within the system. The \textbf{Frontend} layer consists of Vue Router directing requests to Views/Pages, which utilize Components and a Services Layer that communicates via an HTTP Client. The \textbf{Backend} layer comprises modular NestJS components: Auth, Stripe, Plans, Users, and Subscriptions modules. The \textbf{External Services} layer includes Google OAuth 2.0, Apple Sign-In, and Stripe Payment Gateway for third-party integrations.
+The \textbf{Presentation Tier} is a Single Page Application built with Vue.js 3, running entirely in the user's browser. It communicates with the backend through standard HTTPS REST API calls. The \textbf{Application Tier} is a NestJS server that processes all business logic, including authentication, payment handling, and subscription management. The \textbf{Data Tier} uses MongoDB for persistent storage of user accounts, subscriptions, and plan definitions, alongside Redis for caching frequently accessed data and managing user sessions.
 
-\subsection{Component Overview}
+Three external services are integrated: \textbf{Google OAuth 2.0} and \textbf{Apple Sign-In} provide SSO authentication, while \textbf{Stripe} handles all payment processing and sends real-time event notifications back to the backend via webhooks.
 
-The system is composed of the following major components:
+\subsection{Backend Module Organisation}
 
-\begin{itemize}
-    \item \textbf{Frontend Dashboard}: A Single Page Application (SPA) built with Vue.js 3 and Vuetify, providing user interfaces for authentication, subscription management, and administrative functions.
-    \item \textbf{Backend API Gateway}: A NestJS-based REST API that handles authentication, authorization, business logic, and orchestration of external services.
-    \item \textbf{Database Layer}: MongoDB serves as the primary data store for users, subscriptions, plans, and tokens, with Redis providing caching for frequently accessed data.
-    \item \textbf{External Services}: Integration with Google OAuth 2.0, Apple Sign-In, and Stripe for third-party authentication and payment processing.
-\end{itemize}
+Figure~\ref{fig:backend_modules} shows how the backend is organised into distinct modules, each responsible for a specific area of functionality.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/backend_modules.png}
+\caption{Backend Module Organisation}
+\label{fig:backend_modules}
+\end{figure}
+
+The API Gateway routes incoming requests to the appropriate module. The \textbf{Authentication} group handles user login, registration, and token management, with dedicated sub-modules for Google SSO (using the OAuth 2.0 redirect flow) and Apple SSO (using token verification). The \textbf{Payment \& Billing} group consists of the Stripe Module (which manages checkout sessions and processes payment webhooks), the Subscription Module (which tracks each user's subscription status and usage quotas), and the Plan Module (which stores versioned plan definitions and caches them for performance). The dotted lines indicate cross-module communication: the Stripe Module reads plan definitions when creating checkout sessions and updates subscription records when payment events occur.
 
 \subsection{Communication Flow}
 
-The typical request flow proceeds as follows:
-\begin{enumerate}
-    \item The user interacts with the Vue.js frontend through the browser.
-    \item The frontend dispatches HTTP requests to the backend API via Axios interceptors.
-    \item The backend validates the JWT token, checks authorization, and processes the request.
-    \item Business logic is executed, interacting with MongoDB, Redis, or external APIs as needed.
-    \item The response is returned to the frontend, which updates the user interface accordingly.
-\end{enumerate}
+User interactions flow naturally through the system: when a user interacts with the frontend, the browser sends HTTP requests to the backend API, where incoming requests are validated and authorised. The backend then executes the required business logic, which may involve retrieving or storing data, checking cached values, or communicating with external payment and authentication services. Once processing is complete, the backend responds with the result, allowing the frontend to update the user interface accordingly.

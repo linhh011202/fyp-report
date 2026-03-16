@@ -1,0 +1,50 @@
+flowchart TD
+    START["Frontend Makes API Request"]
+
+    ATTACH["Attach Authentication Token<br/>to Request"]
+
+    SEND["Send Request to Backend"]
+
+    RESPONSE{"What is the<br/>response?"}
+
+    SUCCESS["Return Data to Page"]
+
+    TOKEN_ERROR["Token Expired<br/>Authentication Error"]
+
+    REFRESH["Attempt to Refresh<br/>Authentication Token"]
+
+    RETRY["Retry Original Request"]
+
+    REFRESH_FAIL{"Refresh<br/>successful?"}
+
+    CLEAR["Clear User Session"]
+
+    REDIRECT["Redirect to Login"]
+
+    START --> ATTACH
+    ATTACH --> SEND
+    SEND --> RESPONSE
+
+    RESPONSE -->|Success| SUCCESS
+
+    RESPONSE -->|Auth Error| TOKEN_ERROR
+    TOKEN_ERROR --> REFRESH
+    REFRESH --> REFRESH_FAIL
+
+    REFRESH_FAIL -->|Yes| RETRY
+    RETRY --> SUCCESS
+
+    REFRESH_FAIL -->|No| CLEAR
+    CLEAR --> REDIRECT
+
+    style START fill:#F5F5F5,stroke:#616161,stroke-width:2px
+    style ATTACH fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style SEND fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style RESPONSE fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style SUCCESS fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style TOKEN_ERROR fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style REFRESH fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style RETRY fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style REFRESH_FAIL fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style CLEAR fill:#FCE4EC,stroke:#C62828,stroke-width:2px
+    style REDIRECT fill:#FCE4EC,stroke:#C62828,stroke-width:2px

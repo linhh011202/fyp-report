@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant U as 👤 User
+    participant FE as 📱 Vue.js Dashboard
+    participant BE as 🔧 NestJS Backend
+    participant S as 💳 Stripe
+    participant DB as 🗄️ MongoDB
+
+    Note over U,DB: Subscription Purchase Flow
+    U->>FE: Browse subscription plans
+    FE->>BE: GET /plans/latest
+    BE-->>FE: Return plan details
+    FE->>U: Display plan cards with pricing
+
+    U->>FE: Click "Subscribe" on Basic Plan
+    FE->>BE: POST /stripe/checkout-session
+    BE->>S: Create Checkout Session
+    S-->>BE: Return checkout URL
+    BE-->>FE: Return checkout URL
+    FE->>S: Redirect to Stripe Checkout
+    U->>S: Enter payment details
+    S->>U: Payment confirmed
+
+    Note over S,DB: Webhook — Automatic Sync
+    S->>BE: POST /stripe/webhook (checkout.session.completed)
+    BE->>DB: Create subscription record
+    BE->>DB: Set quota & usage counters
+    S-->>U: Redirect to Success page
+    U->>FE: View active subscription & quotas
+
+    Note over U,DB: Subscription Renewal
+    S->>BE: POST /stripe/webhook (invoice.paid)
+    BE->>DB: Extend end date
+    BE->>DB: Reset usage to zero

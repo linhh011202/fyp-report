@@ -22,13 +22,18 @@ Run the conversion script from the project root:
 ./convert_diagrams.sh
 ```
 
+On PowerShell, run:
+```powershell
+.\convert_diagrams.ps1
+```
+
 This will generate PNG images in the `images/` directory with the same base filename.
 
 ## Adding New Diagrams
 
 1. Create a new `.mmd` file in this directory
 2. Write your Mermaid diagram code
-3. Run `./convert_diagrams.sh` to generate the image
+3. Run `./convert_diagrams.sh` or `.\convert_diagrams.ps1` to generate the image
 4. Reference the image in your LaTeX file using `\includegraphics{images/your_diagram.png}`
 
 ## Mermaid Syntax

@@ -1,76 +1,56 @@
 \section{Technology Stack}
 \label{sec:tech_stack}
 
-The Gateway Dashboard leverages modern, industry-standard technologies to ensure robustness, scalability, and developer productivity.
-
-\subsection{Frontend Technologies}
+The Gateway Dashboard leverages modern, industry-standard technologies chosen for their reliability, maturity, and ability to support scalable applications. The following table summarizes the key technologies across all system layers:
 
 \begin{table}[H]
 \centering
-\begin{tabular}{|l|l|p{7cm}|}
+\begin{tabular}{|l|l|p{8cm}|}
 \hline
-\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+\textbf{Layer} & \textbf{Technology} & \textbf{Purpose} \\
 \hline
-Vue.js & 3.x & Progressive JavaScript framework for building user interfaces \\
+Frontend & Vue.js 3 & Progressive JavaScript framework with reactive UI components and excellent developer experience \\
 \hline
-Vuetify & 3.x & Material Design component framework for Vue.js \\
+Frontend & Vuetify 3 & Material Design component library enabling rapid development of professional interfaces \\
 \hline
-Vue Router & 4.x & Official router for single-page application navigation \\
+Frontend & Vue Router 4 & Client-side routing for seamless single-page application navigation \\
 \hline
-Axios & Latest & Promise-based HTTP client for API communication \\
+Frontend & Axios & HTTP client for communicating with the backend API \\
 \hline
-\end{tabular}
-\caption{Frontend Technology Stack}
-\label{tab:frontend_tech}
-\end{table}
-
-\textbf{Vue.js 3} was selected for its Composition API, improved performance, and excellent TypeScript support. \textbf{Vuetify 3} provides a comprehensive set of Material Design components, enabling rapid UI development with a professional appearance.
-
-\subsection{Backend Technologies}
-
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|l|p{7cm}|}
+Backend & NestJS 10 & Modular Node.js framework providing structure and built-in dependency injection \\
 \hline
-\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
+Backend & TypeScript 5 & Typed superset of JavaScript ensuring code reliability and maintainability \\
 \hline
-NestJS & 10.x & Progressive Node.js framework for server-side applications \\
+Backend & Passport & Flexible authentication middleware supporting multiple OAuth providers \\
 \hline
-TypeScript & 5.x & Typed superset of JavaScript for enhanced code quality \\
+Backend & JWT & Stateless authentication tokens enabling secure, scalable session management \\
 \hline
-Passport & 0.7.x & Authentication middleware for Node.js \\
+Data Storage & MongoDB 6 & Document database with flexible schema, ideal for evolving application requirements \\
 \hline
-JWT & Latest & JSON Web Token for stateless authentication \\
+Caching & Redis 7 & In-memory data store providing fast access to frequently requested data \\
+\hline
+External & Stripe & Payment processing platform handling subscriptions, billing, and transactions \\
+\hline
+External & Google OAuth 2.0 & Identity provider enabling social login via Google accounts \\
+\hline
+External & Apple Sign-In & Authentication service supporting Apple device users \\
 \hline
 \end{tabular}
-\caption{Backend Technology Stack}
-\label{tab:backend_tech}
+\caption{Technology Stack Summary}
+\label{tab:tech_stack_summary}
 \end{table}
 
-\textbf{NestJS} provides a modular architecture with built-in dependency injection support, ideal for enterprise-grade applications. TypeScript ensures type safety and improved developer experience. \textbf{Passport} offers a flexible authentication framework with extensive strategy support for OAuth providers.
+\subsection{Frontend Design}
+
+The frontend is built with Vue.js 3, which provides a modern reactive framework with excellent TypeScript support. Vue Router handles navigation between different pages, while Axios manages all communication with the backend. Vuetify components enable rapid development while maintaining a consistent, professional Material Design appearance across the application.
+
+\subsection{Backend Architecture}
+
+The backend is implemented with NestJS, a progressive Node.js framework that enforces modular, scalable architecture patterns. TypeScript ensures type safety throughout the codebase, reducing runtime errors and improving code maintainability. Authentication is managed through Passport middleware combined with JWT tokens, allowing stateless, scalable session handling without server-side session storage.
 
 \subsection{Data Storage and Caching}
 
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|l|p{7cm}|}
-\hline
-\textbf{Technology} & \textbf{Version} & \textbf{Purpose} \\
-\hline
-MongoDB & 6.x & NoSQL document database for flexible schema design \\
-\hline
-Redis & 7.x & In-memory data store for caching \\
-\hline
-\end{tabular}
-\caption{Storage Technologies}
-\label{tab:storage_tech}
-\end{table}
-
-\textbf{MongoDB} was chosen for its schema flexibility, horizontal scalability, and native JSON support. \textbf{Redis} is primarily used for caching frequently accessed data (plans, prices) to reduce database load and API latency.
-
-\subsubsection{Caching Architecture}
-
-Figure~\ref{fig:plan_caching} illustrates the caching architecture for the Plan module. The service layer first checks Redis for cached data, falling back to MongoDB on cache misses.
+MongoDB serves as the primary data store, offering flexible document-based storage that adapts as the application evolves. To optimize performance, frequently accessed data—such as service plans and pricing information—is cached in Redis. This caching strategy reduces database load and API latency by checking the fast in-memory cache first, falling back to the database only when the cache is empty. When a cache miss occurs, the retrieved data is stored for future requests, creating a simple yet effective read-through cache pattern.
 
 \begin{figure}[H]
 \centering
@@ -79,25 +59,8 @@ Figure~\ref{fig:plan_caching} illustrates the caching architecture for the Plan 
 \label{fig:plan_caching}
 \end{figure}
 
-As depicted in Figure~\ref{fig:plan_caching}, the Plan Module implements a read-through caching strategy. When a request for plans is received, the \texttt{PlanService} first queries the Redis cache. If the data is found (cache hit), it is returned immediately. If not (cache miss), the service retrieves the data from MongoDB, stores it in Redis for future requests, and then returns it to the controller.
+This approach significantly improves response times for frequently requested data while minimizing unnecessary database queries during peak usage.
 
-Figure~\ref{fig:cache_flow} shows the detailed cache flow for retrieving the latest plans. This strategy includes cache penetration protection by caching NULL values for a short duration when no plans exist.
+\subsection{External Integrations}
 
-\begin{figure}[!ht]
-\centering
-\includegraphics[width=0.6\textwidth]{images/cache_flow.png}
-\caption{Cache Flow for Latest Plans Retrieval}
-\label{fig:cache_flow}
-\end{figure}
-
-Figure~\ref{fig:cache_flow} provides a granular view of the "get latest plans" logic. It highlights the cache penetration protection mechanism: if a database query returns no plans, a special \texttt{NULL} value is cached for a short duration (e.g., 60 seconds). This prevents repeated queries for non-existent data from overwhelming the database essentially acting as a shield during high-traffic periods.
-
-\subsection{External Services}
-
-\begin{itemize}
-    \item \textbf{Stripe}: Payment processing platform for subscription billing, checkout sessions, and webhook handling.
-    \item \textbf{Google OAuth 2.0}: Identity provider for social login functionality.
-    \item \textbf{Apple Sign-In}: Authentication service for iOS and web users.
-\end{itemize}
-
-These third-party services were selected for their reliability, comprehensive documentation, and industry adoption, reducing development time while ensuring security and compliance.
+The system integrates with three key external services. Google OAuth and Apple Sign-In provide secure, passwordless authentication, reducing the application's authentication overhead while leveraging trusted identity providers. Stripe handles all payment processing, including subscription creation, billing cycles, and transaction management, ensuring compliance with PCI standards and industry best practices.

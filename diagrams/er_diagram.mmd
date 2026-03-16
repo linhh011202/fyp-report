@@ -1,54 +1,49 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#E3F2FD', 'primaryTextColor': '#424242', 'primaryBorderColor': '#1565C0', 'lineColor': '#616161', 'secondaryColor': '#FFF3E0', 'tertiaryColor': '#E8F5E9'}}}%%
 erDiagram
     Users ||--o{ UserTokens : "has active"
     Users ||--o{ TokenBlacklist : "has revoked"
     Users ||--|| Subscriptions : has
-    Plans ||--o{ Subscriptions : "priceId links to"
-    
+    Plans ||--o{ Subscriptions : "linked via plan"
+
     Users {
         ObjectId _id PK
         String email UK
         String password
         String name
         String role
-        String type
         Boolean isVerified
     }
-    
+
     Subscriptions {
         ObjectId _id PK
         ObjectId user FK
         String stripeSubscriptionId
-        String stripeCustomerId
         String status
         Object quota
         Object usage
         Date startDate
         Date endDate
     }
-    
+
     Plans {
         ObjectId _id PK
         String id UK
-        String plans "JSON"
+        String plans
         Number version UK
         Date createdAt
     }
-    
+
     UserTokens {
         ObjectId _id PK
         String userId FK
         String token
         Date expiresAt
-        String userAgent
-        String ipAddress
-        Date createdAt
     }
-    
+
     TokenBlacklist {
         ObjectId _id PK
         String token
         String userId FK
         Date expiresAt
         String reason
-        Date createdAt
     }

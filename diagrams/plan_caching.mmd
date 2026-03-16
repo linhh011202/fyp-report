@@ -13,3 +13,8 @@ flowchart TB
     SVC -->|Write| MONGO
     SVC -->|Read| REDIS
     REDIS -->|Cache miss| MONGO
+
+    style CTRL fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style SVC fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style MONGO fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style REDIS fill:#EDE7F6,stroke:#4527A0,stroke-width:2px

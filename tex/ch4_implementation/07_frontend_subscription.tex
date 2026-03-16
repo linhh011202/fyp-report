@@ -1,445 +1,79 @@
 \subsection{Subscription Management Interface}
 \label{sec:frontend_subscription}
 
-The subscription interface provides plan selection, payment processing with Stripe Checkout, and real-time quota monitoring using Vue 3 Composition API components.
-
-\subsubsection{Component Architecture}
-
-The subscription system consists of interconnected components built with the Composition API:
-\begin{itemize}
-    \item \textbf{Subscription.vue}: Main subscription management page with conditional rendering for users and admins
-    \item \textbf{PlanCard.vue}: Reusable card component displaying plan details with dynamic Stripe pricing
-    \item \textbf{JsonPlansEditor.vue}: Admin-only JSON editor for plan configuration management
-\end{itemize}
+The subscription interface provides users with tools to select service plans, complete payments through Stripe, and monitor their current usage quotas. Administrators can manage available plans through a dedicated configuration interface. The entire subscription system is built with Vue 3 components providing a responsive and interactive experience.
 
 \subsubsection{User Subscription View}
 
-For users with active subscriptions, the view displays:
+For users with active subscriptions, the dashboard displays comprehensive subscription information:
+
 \begin{itemize}
-    \item Current plan name and subscription period (start/end dates)
-    \item Quota allocation for batch and live processing (seconds or unlimited)
-    \item Real-time usage progress bars with color-coded indicators
-    \item Cancel/Resume subscription controls
-    \item Scheduled plan changes with next billing cycle information
+    \item Current plan name and subscription billing period (start and end dates)
+    \item Quota allocation for both batch and real-time processing (measured in seconds or unlimited)
+    \item Visual progress indicators showing current usage relative to allocated quotas
+    \item Color-coded usage indicators: green for low usage, orange for moderate usage (75\%), and red for high usage (90\%+)
+    \item Controls for canceling or resuming subscription at any time
+    \item Scheduled plan changes with information about the next billing cycle
 \end{itemize}
 
-\paragraph{Usage Calculation Logic}
+Usage percentages are calculated to provide clear feedback on consumption. Unlimited quotas are represented as zero usage to indicate no constraint. Plans with zero quota are displayed at 100\% to indicate the service is not available under that plan.
 
-Usage percentage is calculated with special handling for unlimited quotas:
+\subsubsection{Plan Card Component}
 
-\begin{lstlisting}[language=JavaScript, caption={Usage Percentage Calculation}]
-function calculateUsagePercent(used, quota) {
-  if (quota === -1) return 0      // Unlimited quota
-  if (quota === 0) return 100     // No quota
-  return Math.min((used / quota) * 100, 100)
-}
+The plan card is a reusable interface component that displays individual subscription plan options. Each plan card shows:
 
-function getUsageColor(used, quota) {
-  if (quota === -1) return 'success'  // Unlimited is always green
-  const percent = (used / quota) * 100
-  if (percent >= 90) return 'error'   // Red for 90%+
-  if (percent >= 75) return 'warning' // Orange for 75-89%
-  return 'success'                     // Green for <75%
-}
-\end{lstlisting}
-
-\subsubsection{PlanCard Component}
-
-The PlanCard component is a self-contained Vue 3 Composition API component that fetches Stripe pricing data and displays plan features with interactive UI elements.
-
-\paragraph{Component Props and Emits}
-
-\begin{table}[H]
-\centering
-\begin{tabular}{|l|l|p{5cm}|}
-\hline
-\textbf{Prop/Emit} & \textbf{Type} & \textbf{Description} \\
-\hline
-plan & Object & Plan data (id, name, features, priceId, batchDuration, liveDuration) \\
-\hline
-disabled & Boolean & Disable subscribe button (for admins viewing plans) \\
-\hline
-currentPlanId & String & Current user plan ID for badge display \\
-\hline
-nextPlanId & String & Scheduled next plan ID \\
-\hline
-hasActiveSubscription & Boolean & User has active subscription \\
-\hline
-@subscribe & Event & Emitted when user clicks subscribe (payload: \{priceId, planId\}) \\
-\hline
-@cancel-schedule & Event & Emitted when user cancels scheduled plan change \\
-\hline
-\end{tabular}
-\caption{PlanCard Component Interface}
-\label{tab:plancard_props}
-\end{table}
-
-\paragraph{PlanCard Implementation}
-
-The component uses the Composition API with reactive state management:
-
-\begin{lstlisting}[language=JavaScript, caption={PlanCard Component Setup}]
-import { ref, computed, onMounted, watch } from 'vue'
-import { stripeService } from '../services/stripe.service'
-
-export default {
-  name: 'PlanCard',
-  props: {
-    plan: {
-      type: Object,
-      required: true,
-      validator(value) {
-        return value.id && value.name && 
-               value.features && value.priceId
-      }
-    },
-    disabled: { type: Boolean, default: false },
-    currentPlanId: { type: String, default: null },
-    nextPlanId: { type: String, default: null },
-    hasActiveSubscription: { type: Boolean, default: false }
-  },
-  emits: ['subscribe', 'cancel-schedule'],
-  setup(props, { emit }) {
-    const priceInfo = ref(null)
-    const loadingPrice = ref(false)
-    const priceError = ref(null)
-
-    // Computed properties
-    const formattedPrice = computed(() => {
-      if (!priceInfo.value) return 'N/A'
-
-      const amount = priceInfo.value.unit_amount_decimal
-        ? (parseInt(priceInfo.value.unit_amount_decimal) / 100).toFixed(2)
-        : (priceInfo.value.unit_amount / 100).toFixed(2)
-
-      const currency = priceInfo.value.currency.toUpperCase()
-      return `${currency} $${amount}`
-    })
-
-    const billingInterval = computed(() => {
-      if (!priceInfo.value || !priceInfo.value.recurring) {
-        return 'one-time'
-      }
-      return priceInfo.value.recurring.interval
-    })
-
-    const isCurrentPlan = computed(() => {
-      return props.currentPlanId && 
-             props.plan.id === props.currentPlanId
-    })
-
-    const isNextPlan = computed(() => {
-      return props.nextPlanId && 
-             props.plan.id === props.nextPlanId
-    })
-
-    const buttonText = computed(() => {
-      if (isCurrentPlan.value) return 'Current Plan'
-      if (isNextPlan.value) return 'Cancel Schedule'
-      if (props.hasActiveSubscription) return 'Schedule Change'
-      return 'Subscribe Now'
-    })
-
-    // Methods
-    const fetchPriceInfo = async () => {
-      if (!props.plan.priceId) {
-        priceError.value = 'No price ID provided'
-        return
-      }
-
-      loadingPrice.value = true
-      priceError.value = null
-
-      try {
-        priceInfo.value = await stripeService.getPriceInfo(
-          props.plan.priceId
-        )
-      } catch (error) {
-        console.error('Error fetching price info:', error)
-        priceError.value = 'Price unavailable'
-      } finally {
-        loadingPrice.value = false
-      }
-    }
-
-    const handleSubscribe = () => {
-      if (isNextPlan.value) {
-        emit('cancel-schedule')
-        return
-      }
-      emit('subscribe', { 
-        priceId: props.plan.priceId, 
-        planId: props.plan.id 
-      })
-    }
-
-    const formatDuration = (seconds) => {
-      if (seconds === -1) return 'Unlimited'  // Unlimited
-
-      const hours = Math.floor(seconds / 3600)
-      const minutes = Math.floor((seconds % 3600) / 60)
-      const secs = seconds % 60
-
-      const parts = []
-      if (hours > 0) parts.push(`${hours}h`)
-      if (minutes > 0) parts.push(`${minutes}m`)
-      if (secs > 0 || parts.length === 0) parts.push(`${secs}s`)
-      
-      return parts.join(' ')
-    }
-
-    // Lifecycle hooks
-    onMounted(() => {
-      fetchPriceInfo()
-    })
-
-    // Watch for priceId changes
-    watch(() => props.plan.priceId, () => {
-      fetchPriceInfo()
-    })
-
-    return {
-      priceInfo,
-      loadingPrice,
-      priceError,
-      formattedPrice,
-      billingInterval,
-      isCurrentPlan,
-      isNextPlan,
-      buttonText,
-      handleSubscribe,
-      formatDuration
-    }
-  }
-}
-\end{lstlisting}
-
-\paragraph{PlanCard Template}
-
-The template uses Vuetify 3 components with conditional badges and dynamic styling:
-
-\begin{lstlisting}[language=HTML, caption={PlanCard Template}]
-<template>
-  <v-card
-    class="plan-card elevation-8"
-    :class="{ 'recommended-card': plan.recommended }"
-  >
-    <!-- Recommended Badge -->
-    <v-chip
-      v-if="plan.recommended && !isCurrentPlan && !isNextPlan"
-      class="recommended-badge"
-      color="primary"
-      size="small"
-      label
-    >
-      RECOMMENDED
-    </v-chip>
-
-    <!-- Current Plan Badge -->
-    <v-chip
-      v-if="isCurrentPlan"
-      class="current-plan-badge"
-      color="success"
-      size="small"
-      label
-    >
-      <v-icon start size="small">mdi-check-circle</v-icon>
-      CURRENT PLAN
-    </v-chip>
-
-    <!-- Next Subscription Badge -->
-    <v-chip
-      v-if="isNextPlan && !isCurrentPlan"
-      class="next-plan-badge"
-      color="info"
-      size="small"
-      label
-    >
-      <v-icon start size="small">mdi-calendar-clock</v-icon>
-      NEXT SUBSCRIPTION
-    </v-chip>
-
-    <v-card-text class="pa-6">
-      <!-- Plan Name -->
-      <h2 class="text-h4 font-weight-semibold mb-4">
-        {{ plan.name }}
-      </h2>
-
-      <!-- Price with Loading State -->
-      <div class="mb-6">
-        <div v-if="loadingPrice" class="text-center">
-          <v-progress-circular 
-            indeterminate 
-            color="primary" 
-            size="24"
-          ></v-progress-circular>
-          <span class="text-body-2 text-medium-emphasis ml-2">
-            Loading price...
-          </span>
-        </div>
-        <div v-else-if="priceError" class="text-caption text-error">
-          {{ priceError }}
-        </div>
-        <div v-else-if="priceInfo">
-          <span class="text-h3 font-weight-black">
-            {{ formattedPrice }}
-          </span>
-          <span class="text-body-1 text-medium-emphasis">
-            /{{ billingInterval }}
-          </span>
-        </div>
-        <div v-else class="text-caption text-medium-emphasis">
-          Price not available
-        </div>
-      </div>
-
-      <!-- Duration Info -->
-      <div v-if="plan.batchDuration !== undefined || 
-                 plan.liveDuration !== undefined" 
-           class="mb-4">
-        <v-divider class="mb-4"></v-divider>
-        <div v-if="plan.batchDuration !== undefined" 
-             class="d-flex align-center mb-2">
-          <v-icon size="small" color="primary" class="mr-2">
-            mdi-clock-outline
-          </v-icon>
-          <span class="text-body-2">
-            <strong>Batch Duration:</strong>
-            {{ formatDuration(plan.batchDuration) }}
-          </span>
-        </div>
-        <div v-if="plan.liveDuration !== undefined" 
-             class="d-flex align-center">
-          <v-icon size="small" color="primary" class="mr-2">
-            mdi-clock-fast
-          </v-icon>
-          <span class="text-body-2">
-            <strong>Live Duration:</strong>
-            {{ formatDuration(plan.liveDuration) }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Features List -->
-      <v-list class="mt-6 bg-transparent">
-        <v-list-item
-          v-for="(feature, index) in plan.features"
-          :key="index"
-          class="px-0"
-        >
-          <template v-slot:prepend>
-            <v-icon color="success">mdi-check</v-icon>
-          </template>
-          <v-list-item-title class="text-body-1">
-            {{ feature }}
-          </v-list-item-title>
-        </v-list-item>
-      </v-list>
-
-      <!-- Subscribe Button -->
-      <v-btn
-        color="primary"
-        size="x-large"
-        block
-        class="mt-6 elevation-4"
-        :disabled="disabled || isCurrentPlan"
-        @click="handleSubscribe"
-      >
-        {{ buttonText }}
-      </v-btn>
-    </v-card-text>
-  </v-card>
-</template>
-\end{lstlisting}
-
-\subsubsection{Stripe Checkout Integration}
-
-When a user subscribes, the frontend initiates Stripe Checkout:
-
-\begin{lstlisting}[language=JavaScript, caption={Checkout Session Creation}]
-async handleSubscribe(data) {
-  try {
-    const { priceId, planId } = data
-    const result = await stripeService.createCheckoutSession(priceId)
-    
-    if (result?.url) {
-      // Redirect to Stripe Checkout
-      window.location.href = result.url
-    } else {
-      this.showError('Failed to create checkout session. Please try again.')
-    }
-  } catch (err) {
-    console.error('Subscription error:', err)
-    this.showError('An error occurred during checkout.')
-  }
-}
-\end{lstlisting}
-
-\subsubsection{Cancel and Resume Subscription}
-
-Users can manage their subscription lifecycle with confirmation dialogs:
-
-\begin{lstlisting}[language=JavaScript, caption={Cancel Subscription with Confirmation}]
-async handleCancelSubscription() {
-  const confirmed = confirm(
-    'Are you sure you want to cancel your subscription? ' +
-    'It will remain active until the end of the current billing period.'
-  )
-  
-  if (!confirmed) return
-
-  try {
-    this.cancellingSubscription = true
-    await stripeService.cancelSubscription(
-      this.subscription.stripeSubscriptionId
-    )
-    
-    // Refresh subscription status
-    await this.checkStripeSubscriptionStatus(
-      this.subscription.stripeSubscriptionId
-    )
-    
-    this.showSuccess(
-      'Subscription scheduled for cancellation at period end.'
-    )
-  } catch (err) {
-    console.error('Cancel error:', err)
-    this.showError('Failed to cancel subscription.')
-  } finally {
-    this.cancellingSubscription = false
-  }
-}
-
-async handleResumeSubscription() {
-  try {
-    this.resumingSubscription = true
-    await stripeService.resumeSubscription(
-      this.subscription.stripeSubscriptionId
-    )
-    
-    await this.checkStripeSubscriptionStatus(
-      this.subscription.stripeSubscriptionId
-    )
-    
-    this.showSuccess('Subscription resumption successful.')
-  } catch (err) {
-    console.error('Resume error:', err)
-    this.showError('Failed to resume subscription.')
-  } finally {
-    this.resumingSubscription = false
-  }
-}
-\end{lstlisting}
-
-\subsubsection{Admin Plans Editor}
-
-Administrators access a JSON editor for managing plan configurations:
 \begin{itemize}
-    \item Live JSON validation with syntax highlighting via JSONEditor library
-    \item Stripe price ID validation before publishing to prevent invalid configurations
-    \item Diff comparison with current version to review changes
-    \item Version history tracking with rollback capability
-    \item Auto-formatting and error highlighting
+    \item Plan name and pricing retrieved from Stripe's pricing system
+    \item Billing interval (monthly, annual, or one-time)
+    \item Processing duration limits for both batch and live modes
+    \item Feature list highlighting capabilities included in the plan
+    \item Interactive button indicating action available: "Subscribe Now" for unsubscribed users, "Current Plan" for the active subscription, or "Schedule Change" to switch plans
+    \item Badges indicating current or scheduled subscription status
 \end{itemize}
 
-The editor validates each plan's \texttt{priceId} against Stripe's API before allowing publication, ensuring only valid pricing configurations are saved to the database.
+Plan pricing is fetched dynamically from Stripe's API, ensuring the interface always displays current pricing without requiring manual updates. This integration allows changes to pricing in Stripe to be reflected immediately in the user interface.
+
+\subsubsection{Checkout Process}
+
+When users select a plan to purchase, the application initiates a seamless checkout process:
+
+\begin{enumerate}
+    \item User clicks the subscribe button on the desired plan card
+    \item Application requests a checkout session from the backend, passing the Stripe price identifier
+    \item User is redirected to Stripe's hosted checkout page
+    \item User completes payment through Stripe's secure payment interface
+    \item After successful payment, Stripe redirects the user back to the dashboard
+    \item Application displays a success page and the subscription is activated
+\end{enumerate}
+
+If users cancel during checkout, they are returned to the dashboard on a cancellation page, allowing them to retry or select a different plan. The checkout process is entirely handled by Stripe, ensuring payment security.
+
+\subsubsection{Subscription Management}
+
+After purchasing a subscription, users can manage their subscription through the subscription page:
+
+\paragraph{Plan Changes}
+
+Users with active subscriptions can switch to different plans. The system allows scheduling plan changes at the next billing cycle rather than forcing immediate upgrades or downgrades. This prevents unexpected billing changes and allows users to plan their changes in advance.
+
+\paragraph{Cancellation}
+
+Users can cancel their subscriptions at any time. Cancellation is scheduled for the end of the current billing period, allowing the user to retain access for the remainder of their paid cycle. The system displays clear information about when the subscription will end.
+
+\paragraph{Resumption}
+
+Users who have canceled their subscription can resume it before the cancellation takes effect. This allows users to change their mind without having to re-enter payment information.
+
+\subsubsection{Admin Plan Configuration}
+
+Administrators access a dedicated plan management interface for configuring available subscription plans. This interface provides:
+
+\begin{itemize}
+    \item A JSON-based editor for defining plan properties including names, features, durations, and Stripe price identifiers
+    \item Live validation to ensure pricing identifiers correspond to valid Stripe prices before publication
+    \item Diff comparison showing what has changed from the current published version
+    \item Version history tracking with ability to revert to previous configurations
+    \item Real-time syntax highlighting and validation feedback
+\end{itemize}
+
+The admin editor validates each plan's Stripe price identifier against Stripe's API before allowing the configuration to be published, preventing invalid or broken pricing configurations from being saved.

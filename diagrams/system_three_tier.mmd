@@ -1,0 +1,34 @@
+graph LR
+    subgraph "Presentation Tier"
+        FE["Vue.js 3 Dashboard\n(Single Page Application)"]
+    end
+
+    subgraph "Application Tier"
+        BE["NestJS Backend\n(REST API Server)"]
+    end
+
+    subgraph "Data Tier"
+        DB[("MongoDB\n(Persistent Storage)")]
+        CACHE[("Redis\n(Cache & Sessions)")]
+    end
+
+    subgraph "External Services"
+        GOOGLE["Google OAuth 2.0"]
+        APPLE["Apple Sign-In"]
+        STRIPE["Stripe Payments"]
+    end
+
+    FE -->|"HTTPS / REST API"| BE
+    BE -->|"Read / Write"| DB
+    BE -->|"Cache / Sessions"| CACHE
+    BE -->|"Authentication"| GOOGLE
+    BE -->|"Authentication"| APPLE
+    BE -->|"Payments & Webhooks"| STRIPE
+
+    style FE fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style BE fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style DB fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style CACHE fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style GOOGLE fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style APPLE fill:#F5F5F5,stroke:#616161,stroke-width:2px
+    style STRIPE fill:#EDE7F6,stroke:#4527A0,stroke-width:2px

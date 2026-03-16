@@ -1,0 +1,16 @@
+sequenceDiagram
+    %%{init: {'theme': 'base', 'themeVariables': {'actorBkg': '#E3F2FD', 'actorBorder': '#1565C0', 'actorTextColor': '#1565C0', 'activationBkgColor': '#FFF3E0', 'activationBorderColor': '#E65100', 'signalColor': '#424242', 'signalTextColor': '#424242', 'noteBkgColor': '#F5F5F5', 'noteBorderColor': '#616161', 'noteTextColor': '#424242', 'loopTextColor': '#E65100', 'labelBoxBkgColor': '#FFF3E0', 'labelBoxBorderColor': '#E65100', 'labelTextColor': '#E65100', 'altSectionBkgColor': '#E8F5E9', 'altSectionBkgColor2': '#FCE4EC'}}}%%
+
+    participant User
+    participant Dashboard
+    participant Backend
+    participant Stripe
+
+    User->>Dashboard: Select plan
+    Dashboard->>Backend: Start checkout
+    Backend->>Stripe: Create session
+    Stripe-->>Dashboard: Go to payment
+    Dashboard->>User: Open payment form
+    User->>Stripe: Pay now
+    Stripe->>Backend: Payment success
+    Backend->>Dashboard: Confirmed

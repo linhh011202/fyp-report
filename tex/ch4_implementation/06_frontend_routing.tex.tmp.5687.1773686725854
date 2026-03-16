@@ -1,0 +1,101 @@
+\subsection{Routing and Navigation}
+\label{sec:frontend_routing}
+
+Vue Router manages navigation throughout the application and enforces access control constraints. The routing system ensures that users can only access pages appropriate for their authentication status and role, with automatic redirection to login pages when access is denied.
+
+\subsubsection{Route Configuration}
+
+The application defines a set of routes corresponding to different pages and features. Each route specifies whether authentication is required and whether administrative privileges are necessary.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|l|}
+\hline
+\textbf{Path} & \textbf{Auth} & \textbf{Admin} & \textbf{Component} \\
+\hline
+/ & Yes & Yes & Dashboard.vue \\
+\hline
+/sign-in & No & No & SignIn.vue \\
+\hline
+/sign-up & No & No & SignUp.vue \\
+\hline
+/complete-signup & No & No & CompleteSignup.vue \\
+\hline
+/success & No & No & Success.vue \\
+\hline
+/cancel & No & No & Cancel.vue \\
+\hline
+/speeches & Yes & No & Speeches.vue \\
+\hline
+/speeches/:speechId & Yes & No & SpeechDetail.vue \\
+\hline
+/files & Yes & No & Files.vue \\
+\hline
+/files/:fileId & Yes & No & FileDetail.vue \\
+\hline
+/applications & Yes & No & Applications.vue \\
+\hline
+/applications/:appId & Yes & No & ApplicationDetail.vue \\
+\hline
+/subscription & Yes & No & Subscription.vue \\
+\hline
+/users & Yes & Yes & Users.vue \\
+\hline
+/users/:userId & Yes & Yes & UserDetail.vue \\
+\hline
+/request-log & Yes & Yes & RequestLog.vue \\
+\hline
+/settings & Yes & Yes & Settings.vue \\
+\hline
+\end{tabular}
+\caption{Route Definitions}
+\label{tab:route_definitions}
+\end{table}
+
+Routes marked as requiring authentication cannot be accessed by unauthenticated users. Routes requiring admin privileges redirect non-administrative users to appropriate pages. Unauthenticated users attempting to access protected routes are redirected to the login page.
+
+\subsubsection{Navigation Guards}
+
+Figure~\ref{fig:frontend_navigation_guards} illustrates the navigation guard flow.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{images/frontend_navigation_guards.png}
+\caption{Navigation Guards Flow}
+\label{fig:frontend_navigation_guards}
+\end{figure}
+
+Navigation guards are global middleware that run before every page transition. The application implements two sequential guards:
+
+\paragraph{Session Guard}
+
+The session guard ensures that current user information is loaded before navigation. When users first access the application or after page reload, this guard checks if user data is available and loads it from the JWT token if necessary. This guarantees that subsequent route checks have access to complete user information.
+
+\paragraph{Authentication Guard}
+
+The authentication guard enforces access control rules. It examines each route's requirements and compares them against the current user's authentication status and role. If a user attempts to access a route they are not authorized for, the guard redirects them appropriately: unauthenticated users to the login page, and non-administrators trying to access admin pages to regular user pages.
+
+\subsubsection{HTTP Interceptors and Token Management}
+
+Figure~\ref{fig:frontend_http_interceptor} shows the HTTP interceptor flow for automatic token refresh.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/frontend_http_interceptor.png}
+\caption{HTTP Interceptor Flow with Token Refresh}
+\label{fig:frontend_http_interceptor}
+\end{figure}
+
+HTTP interceptors automatically manage authentication tokens on all API requests. When a request is made, the interceptor attaches the current access token to the authorization header. If the server responds with an authentication failure (401 status), the interceptor attempts to refresh the token and retry the original request transparently.
+
+\paragraph{Request Handling}
+
+Each outgoing API request automatically includes the current access token in its authorization header. This ensures that all API calls are properly authenticated without requiring manual token management in individual components or services.
+
+\paragraph{Response Handling with Token Refresh}
+
+When the server indicates that a token has expired with a 401 response, the interceptor attempts to refresh the token using a dedicated refresh endpoint. If successful, the new token is stored and the original request is automatically retried with the new token. The user experiences this as a seamless continuation of their action.
+
+If token refresh fails (due to network error, explicit revocation, or backend issues), the application clears all credentials and redirects the user to the login page, requiring manual re-authentication. Error messages are displayed to inform users of authentication failures.
+
+This approach provides a balance between security and user experience: tokens can expire for security reasons, but users are not unnecessarily interrupted unless absolutely necessary.

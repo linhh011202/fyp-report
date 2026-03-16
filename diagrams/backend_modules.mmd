@@ -1,0 +1,33 @@
+graph TB
+    API["API Gateway\n(Request Routing)"]
+
+    subgraph "Authentication"
+        AUTH["Auth Module\n(Login, Register, Tokens)"]
+        GSSO["Google SSO\n(OAuth 2.0 Flow)"]
+        ASSO["Apple SSO\n(Token Verification)"]
+    end
+
+    subgraph "Payment & Billing"
+        STRIPE_MOD["Stripe Module\n(Checkout, Webhooks)"]
+        SUB["Subscription Module\n(Quotas, Usage Tracking)"]
+        PLAN["Plan Module\n(Tier Definitions, Versioning)"]
+    end
+
+    API --> AUTH
+    API --> STRIPE_MOD
+    API --> SUB
+    API --> PLAN
+
+    AUTH --> GSSO
+    AUTH --> ASSO
+
+    STRIPE_MOD -.->|"reads plans"| PLAN
+    STRIPE_MOD -.->|"updates subscriptions"| SUB
+
+    style API fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style AUTH fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style GSSO fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style ASSO fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style STRIPE_MOD fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style SUB fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style PLAN fill:#FFF3E0,stroke:#E65100,stroke-width:2px

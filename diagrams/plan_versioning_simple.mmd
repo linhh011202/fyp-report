@@ -1,0 +1,33 @@
+flowchart LR
+    AdminUpdate["Admin updates plans"]
+    NewVersion["System creates new version"]
+
+    Version1["Plan v1"]
+    Version2["Plan v2"]
+    Version3["Plan v3"]
+
+    ExistingSub["Existing subscribers<br/>keep old plan"]
+    NewSub["New subscribers<br/>get latest plan"]
+
+    CacheRefresh["Cache automatically<br/>refreshed"]
+
+    AdminUpdate --> NewVersion
+    NewVersion --> Version1
+    NewVersion --> Version2
+    NewVersion --> Version3
+
+    Version3 --> NewSub
+    Version1 --> ExistingSub
+    Version2 --> ExistingSub
+
+    NewSub --> CacheRefresh
+    ExistingSub --> CacheRefresh
+
+    style AdminUpdate fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style NewVersion fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style Version1 fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style Version2 fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style Version3 fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style ExistingSub fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style NewSub fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style CacheRefresh fill:#EDE7F6,stroke:#4527A0,stroke-width:2px

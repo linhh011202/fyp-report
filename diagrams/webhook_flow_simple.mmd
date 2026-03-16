@@ -1,0 +1,47 @@
+flowchart TD
+    StripeEvent["Stripe sends event"]
+    Verify["Verify event authenticity"]
+    Route["Route by event type"]
+
+    PaymentComplete["Payment completed"]
+    ActivateSub["Activate subscription"]
+
+    SubRenewed["Subscription renewed"]
+    ResetQuota["Reset usage quota"]
+
+    PlanChange["Plan change applied"]
+    UpdatePlan["Update plan details"]
+
+    Unknown["Unknown event type"]
+    LogIgnore["Log and ignore"]
+
+    StripeEvent --> Verify
+    Verify --> Route
+
+    Route -->|Payment| PaymentComplete
+    Route -->|Renewal| SubRenewed
+    Route -->|Plan Change| PlanChange
+    Route -->|Other| Unknown
+
+    PaymentComplete --> ActivateSub
+    SubRenewed --> ResetQuota
+    PlanChange --> UpdatePlan
+    Unknown --> LogIgnore
+
+    ActivateSub --> End["Process complete"]
+    ResetQuota --> End
+    UpdatePlan --> End
+    LogIgnore --> End
+
+    style StripeEvent fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style Verify fill:#EDE7F6,stroke:#4527A0,stroke-width:2px
+    style Route fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style PaymentComplete fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style ActivateSub fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style SubRenewed fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style ResetQuota fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style PlanChange fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style UpdatePlan fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style Unknown fill:#F5F5F5,stroke:#616161,stroke-width:2px
+    style LogIgnore fill:#F5F5F5,stroke:#616161,stroke-width:2px
+    style End fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px

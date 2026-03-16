@@ -1,0 +1,19 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#FFF3E0', 'primaryTextColor': '#424242', 'primaryBorderColor': '#E65100', 'lineColor': '#616161', 'secondaryColor': '#E8F5E9', 'tertiaryColor': '#E3F2FD'}}}%%
+stateDiagram-v2
+    [*] --> NoSubscription
+
+    NoSubscription --> Checkout: User selects plan
+    Checkout --> Active: Payment successful
+    Checkout --> NoSubscription: Payment cancelled
+
+    Active --> PendingCancellation: User cancels
+    Active --> PlanChangeScheduled: Upgrade / Downgrade
+    Active --> Active: Billing period renews
+
+    PendingCancellation --> Expired: Period ends
+    PendingCancellation --> Active: User resumes
+
+    PlanChangeScheduled --> Active: Change applied
+
+    Expired --> Checkout: User resubscribes
+    Expired --> [*]

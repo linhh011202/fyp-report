@@ -1,0 +1,18 @@
+sequenceDiagram
+    %%{init: {'theme': 'base', 'themeVariables': {'actorBkg': '#E3F2FD', 'actorBorder': '#1565C0', 'actorTextColor': '#1565C0', 'activationBkgColor': '#FFF3E0', 'activationBorderColor': '#E65100', 'signalColor': '#424242', 'signalTextColor': '#424242', 'noteBkgColor': '#F5F5F5', 'noteBorderColor': '#616161', 'noteTextColor': '#424242', 'loopTextColor': '#E65100', 'labelBoxBkgColor': '#FFF3E0', 'labelBoxBorderColor': '#E65100', 'labelTextColor': '#E65100', 'altSectionBkgColor': '#E8F5E9', 'altSectionBkgColor2': '#FCE4EC'}}}%%
+
+    participant User
+    participant Frontend
+    participant Google
+    participant Backend
+
+    User->>Frontend: Click sign in
+    Frontend->>Google: Redirect to login
+    Google->>User: Show consent
+    User->>Google: Approve access
+    Google->>Frontend: Return auth code
+    Frontend->>Backend: Send code
+    Backend->>Google: Verify code
+    Google->>Backend: Return user data
+    Backend->>Frontend: Login success
+    Frontend->>User: Go to dashboard

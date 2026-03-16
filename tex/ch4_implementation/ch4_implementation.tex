@@ -1,7 +1,7 @@
-\chapter{Detailed Implementation}
+\chapter{Implementation}
 \label{chap:implementation}
 
-This chapter provides a comprehensive examination of the key implementation details of the Gateway Dashboard system. It is organized into two main parts: Backend Implementation covering authentication and payment systems, and Frontend Development covering the Vue.js dashboard application.
+This chapter describes the implementation of the Gateway Dashboard system, organised into two main parts. The first part covers the backend services, including the authentication system with Single Sign-On support and the payment and subscription management infrastructure. The second part covers the frontend dashboard application built with Vue.js.
 
 % ============================================================
 % PART 1: BACKEND IMPLEMENTATION
@@ -9,18 +9,18 @@ This chapter provides a comprehensive examination of the key implementation deta
 \section{Backend Implementation}
 \label{sec:backend}
 
-This section covers the server-side implementation including Single Sign-On (SSO) authentication and payment/subscription management.
+The backend is built with NestJS, a modular Node.js framework that provides a well-structured foundation for building scalable server-side applications. The backend is organised into distinct modules, each responsible for a specific domain of functionality. This section describes the two major backend subsystems developed in this project: the authentication system and the payment and subscription management system.
 
 \input{tex/ch4_implementation/01_sso}
 \input{tex/ch4_implementation/02_payment}
 
 % ============================================================
-% PART 2: FRONTEND IMPLEMENTATION  
+% PART 2: FRONTEND IMPLEMENTATION
 % ============================================================
 \section{Frontend Implementation}
 \label{sec:frontend}
 
-This section details the frontend implementation of the Gateway Dashboard, including the Vue.js architecture, component structure, routing implementation, and subscription management interface.
+The frontend is a Single Page Application (SPA) built with Vue.js 3 and Vuetify, providing an intuitive web-based interface for users and administrators. This section describes the frontend architecture, authentication experience, navigation system, and subscription management interface.
 
 \input{tex/ch4_implementation/04_frontend_overview}
 \input{tex/ch4_implementation/05_frontend_auth}

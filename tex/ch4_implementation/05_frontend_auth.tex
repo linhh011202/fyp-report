@@ -1,7 +1,7 @@
 \subsection{Authentication Frontend}
 \label{sec:frontend_auth}
 
-The frontend authentication system provides a secure and user-friendly login experience with support for three authentication methods: email and password, Google OAuth, and Apple Sign-In. The system manages tokens securely, automatically refreshes expired credentials, and persists user sessions across browser sessions.
+The frontend authentication system provides a secure and user friendly login experience with support for three authentication methods: email and password, Google OAuth, and Apple Sign-In. The system manages tokens securely, automatically refreshes expired credentials, and persists user sessions across browser sessions.
 
 \subsubsection{Three Authentication Methods}
 
@@ -10,18 +10,18 @@ The application offers multiple login pathways to accommodate different user pre
 \begin{itemize}
     \item \textbf{Email/Password Authentication}: Users register and log in using credentials entered directly in the application. This traditional method is suitable for users who prefer direct credential management.
     \item \textbf{Google OAuth}: Users can authenticate using their existing Google accounts, avoiding the need for a separate password. The authentication flow redirects to Google's servers and returns control to the dashboard upon successful authentication.
-    \item \textbf{Apple Sign-In}: Similar to Google OAuth, users authenticate through Apple's identity system, offering privacy-focused authentication with optional email masking.
+    \item \textbf{Apple Sign-In}: Similar to Google OAuth, users authenticate through Apple's identity system, offering privacy focused authentication with optional email masking.
 \end{itemize}
 
-All three methods result in the same token-based authentication system on the frontend, with no differences in subsequent operations or access control.
+All three methods result in the same token based authentication system on the frontend, with no differences in subsequent operations or access control.
 
 \subsubsection{Token Management Strategy}
 
-The authentication system implements a token-based approach where the backend issues JSON Web Tokens (JWT) upon successful login. These tokens are stored in the browser's local storage for persistence across sessions.
+The authentication system implements a token based approach where the backend issues JSON Web Tokens (JWT) upon successful login. These tokens are stored in the browser's local storage for persistence across sessions.
 
 \paragraph{Automatic Token Refresh}
 
-To maintain session continuity without requiring frequent re-authentication, the system implements automatic token refresh. When a token expires, the application detects the expiration and requests a new token from the backend using a refresh mechanism. This process happens transparently without requiring user intervention. Tokens are verified periodically to detect expiration before they become invalid.
+To maintain session continuity without requiring frequent reauthentication, the system implements automatic token refresh. When a token expires, the application detects the expiration and requests a new token from the backend using a refresh mechanism. This process happens transparently without requiring user intervention. Tokens are verified periodically to detect expiration before they become invalid.
 
 \paragraph{Session Persistence}
 
@@ -29,7 +29,7 @@ Along with the access token, the application stores metadata including subscript
 
 \paragraph{Error Handling}
 
-If token refresh fails (for example, due to network issues or explicit token revocation), the application clears all stored credentials and redirects the user to the login page, forcing re-authentication.
+If token refresh fails (for example, due to network issues or explicit token revocation), the application clears all stored credentials and redirects the user to the login page, forcing reauthentication.
 
 \subsubsection{OAuth Signup Flow}
 
@@ -43,10 +43,10 @@ Users who authenticate through Google or Apple Sign-In but lack an existing acco
     \item The user is automatically logged in and redirected to the main dashboard
 \end{enumerate}
 
-This two-step process ensures that all users, regardless of authentication method, have a complete account with all necessary information stored in the system.
+This two step process ensures that all users, regardless of authentication method, have a complete account with all necessary information stored in the system.
 
 \subsubsection{Authentication State Management}
 
 The application uses a reactive authentication composable that provides components with access to authentication state such as whether the user is logged in, their access token, subscription status, and verification status. This composable also exposes a logout function that revokes the user's token and clears all stored credentials.
 
-The authentication system is separated from the API communication layer to avoid circular dependencies and ensure reliable token handling regardless of API state. This separation is maintained through a dedicated authentication service that uses low-level fetch mechanisms for authentication operations, while other API calls use a higher-level HTTP client with automatic token injection.
+The authentication system is separated from the API communication layer to avoid circular dependencies and ensure reliable token handling regardless of API state. This separation is maintained through a dedicated authentication service that uses low level fetch mechanisms for authentication operations, while other API calls use a higher level HTTP client with automatic token injection.

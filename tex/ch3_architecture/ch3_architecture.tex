@@ -1,8 +1,12 @@
 \chapter{System Architecture}
 \label{chap:architecture}
 
-This chapter presents the Gateway Dashboard system architecture at a high level, focusing on how the key components interact and the design decisions that enable the platform to scale and evolve. Rather than diving into implementation details, we examine the technology choices, communication patterns, and data management approach that professors and stakeholders need to understand the system's overall design.
+This chapter presents the Gateway Dashboard system architecture at a high level, focusing on how the key components interact and the design decisions that enable the platform to scale and evolve. Section~\ref{sec:arch_overview} introduces the three tier system architecture and the organisation of backend modules. Section~\ref{sec:tech_stack} describes the technology stack and caching strategy. Section~\ref{sec:database_design} covers the database schema design and entity relationships.
 
 \input{tex/ch3_architecture/01_overview}
 \input{tex/ch3_architecture/02_tech_stack}
 \input{tex/ch3_architecture/03_database}
+
+\section{Summary}
+
+This chapter presented the Gateway Dashboard system architecture across three layers. The three tier design separates the Vue.js frontend, NestJS backend, and MongoDB/Redis data layer, allowing each to evolve independently. The backend is organised into modular components for authentication (with Google and Apple SSO), payment processing (via Stripe), and subscription management, communicating through well defined interfaces. The technology stack leverages industry standard frameworks chosen for reliability, developer experience, and scalability. The database schema uses MongoDB's document oriented approach with separate collections for users, subscriptions, plans, tokens, and token blacklisting, supported by Redis caching to reduce latency on frequently accessed data. Together, these architectural decisions provide a solid foundation for the implementation described in the next chapter.

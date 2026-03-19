@@ -52,7 +52,7 @@ The application defines a set of routes corresponding to different pages and fea
 \label{tab:route_definitions}
 \end{table}
 
-Routes marked as requiring authentication cannot be accessed by unauthenticated users. Admin-only routes redirect non-administrative users to the regular dashboard.
+Routes marked as requiring authentication cannot be accessed by unauthenticated users. Admin only routes redirect non administrative users to the regular dashboard.
 
 \subsubsection{Navigation Guards}
 
@@ -65,7 +65,7 @@ Navigation guards are global checks that run before every page transition, ensur
 \label{fig:navigation_guard_simple}
 \end{figure}
 
-The guard evaluates three conditions in sequence. First, it checks whether the requested page is public (such as the sign-in or sign-up page)---if so, access is granted immediately. Second, for protected pages, it verifies that the user is logged in; if not, the user is redirected to the sign-in page. Third, for admin-only pages, it checks whether the logged-in user has administrator privileges; non-admin users are redirected to the regular dashboard. This layered approach ensures that every navigation action is validated before the page loads.
+The guard evaluates three conditions in sequence. First, it checks whether the requested page is public (such as the sign in or sign up page). If so, access is granted immediately. Second, for protected pages, it verifies that the user is logged in; if not, the user is redirected to the sign in page. Third, for admin only pages, it checks whether the logged in user has administrator privileges; non admin users are redirected to the regular dashboard. This layered approach ensures that every navigation action is validated before the page loads.
 
 \subsubsection{Automatic Token Management}
 
@@ -78,6 +78,6 @@ The frontend automatically manages authentication tokens on all API requests, en
 \label{fig:token_auto_refresh_simple}
 \end{figure}
 
-When any page makes a request to the backend, the system automatically attaches the user's authentication token. If the backend accepts the request, the data is returned normally. However, if the token has expired, the system detects the authentication error and automatically attempts to obtain a fresh token from the backend. If the refresh succeeds, the original request is retried transparently---the user never notices the interruption. If the refresh fails (for example, because the user's session was revoked), the system clears all stored credentials and redirects the user to the sign-in page.
+When any page makes a request to the backend, the system automatically attaches the user's authentication token. If the backend accepts the request, the data is returned normally. However, if the token has expired, the system detects the authentication error and automatically attempts to obtain a fresh token from the backend. If the refresh succeeds, the original request is retried transparently. The user never notices the interruption. If the refresh fails (for example, because the user's session was revoked), the system clears all stored credentials and redirects the user to the sign in page.
 
-This approach provides a balance between security and user experience: tokens expire regularly for security purposes, but users are not unnecessarily interrupted unless re-authentication is truly required.
+This approach provides a balance between security and user experience: tokens expire regularly for security purposes, but users are not unnecessarily interrupted unless reauthentication is truly required.

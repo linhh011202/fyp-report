@@ -9,9 +9,9 @@ For users with active subscriptions, the dashboard displays comprehensive subscr
 
 \begin{itemize}
     \item Current plan name and subscription billing period (start and end dates)
-    \item Quota allocation for both batch and real-time processing (measured in seconds or unlimited)
+    \item Quota allocation for both batch and real time processing (measured in seconds or unlimited)
     \item Visual progress indicators showing current usage relative to allocated quotas
-    \item Color-coded usage indicators: green for low usage, orange for moderate usage (75\%), and red for high usage (90\%+)
+    \item Colour coded usage indicators: green for low usage, orange for moderate usage (75\%), and red for high usage (90\%+)
     \item Controls for canceling or resuming subscription at any time
     \item Scheduled plan changes with information about the next billing cycle
 \end{itemize}
@@ -24,7 +24,7 @@ The plan card is a reusable interface component that displays individual subscri
 
 \begin{itemize}
     \item Plan name and pricing retrieved from Stripe's pricing system
-    \item Billing interval (monthly, annual, or one-time)
+    \item Billing interval (monthly, annual, or one time)
     \item Processing duration limits for both batch and live modes
     \item Feature list highlighting capabilities included in the plan
     \item Interactive button indicating action available: "Subscribe Now" for unsubscribed users, "Current Plan" for the active subscription, or "Schedule Change" to switch plans
@@ -62,18 +62,18 @@ Users can cancel their subscriptions at any time. Cancellation is scheduled for 
 
 \paragraph{Resumption}
 
-Users who have canceled their subscription can resume it before the cancellation takes effect. This allows users to change their mind without having to re-enter payment information.
+Users who have canceled their subscription can resume it before the cancellation takes effect. This allows users to change their mind without having to reenter payment information.
 
 \subsubsection{Admin Plan Configuration}
 
 Administrators access a dedicated plan management interface for configuring available subscription plans. This interface provides:
 
 \begin{itemize}
-    \item A JSON-based editor for defining plan properties including names, features, durations, and Stripe price identifiers
+    \item A JSON based editor for defining plan properties including names, features, durations, and Stripe price identifiers
     \item Live validation to ensure pricing identifiers correspond to valid Stripe prices before publication
     \item Diff comparison showing what has changed from the current published version
     \item Version history tracking with ability to revert to previous configurations
-    \item Real-time syntax highlighting and validation feedback
+    \item Real time syntax highlighting and validation feedback
 \end{itemize}
 
 The admin editor validates each plan's Stripe price identifier against Stripe's API before allowing the configuration to be published, preventing invalid or broken pricing configurations from being saved.

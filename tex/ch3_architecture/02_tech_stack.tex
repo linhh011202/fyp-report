@@ -1,7 +1,7 @@
 \section{Technology Stack}
 \label{sec:tech_stack}
 
-The Gateway Dashboard leverages modern, industry-standard technologies chosen for their reliability, maturity, and ability to support scalable applications. The following table summarizes the key technologies across all system layers:
+The Gateway Dashboard leverages modern, industry standard technologies chosen for their reliability, maturity, and ability to support scalable applications. The following table summarizes the key technologies across all system layers:
 
 \begin{table}[H]
 \centering
@@ -13,11 +13,11 @@ Frontend & Vue.js 3 & Progressive JavaScript framework with reactive UI componen
 \hline
 Frontend & Vuetify 3 & Material Design component library enabling rapid development of professional interfaces \\
 \hline
-Frontend & Vue Router 4 & Client-side routing for seamless single-page application navigation \\
+Frontend & Vue Router 4 & Client side routing for seamless single page application navigation \\
 \hline
 Frontend & Axios & HTTP client for communicating with the backend API \\
 \hline
-Backend & NestJS 10 & Modular Node.js framework providing structure and built-in dependency injection \\
+Backend & NestJS 10 & Modular Node.js framework providing structure and built in dependency injection \\
 \hline
 Backend & TypeScript 5 & Typed superset of JavaScript ensuring code reliability and maintainability \\
 \hline
@@ -27,7 +27,7 @@ Backend & JWT & Stateless authentication tokens enabling secure, scalable sessio
 \hline
 Data Storage & MongoDB 6 & Document database with flexible schema, ideal for evolving application requirements \\
 \hline
-Caching & Redis 7 & In-memory data store providing fast access to frequently requested data \\
+Caching & Redis 7 & In memory data store providing fast access to frequently requested data \\
 \hline
 External & Stripe & Payment processing platform handling subscriptions, billing, and transactions \\
 \hline
@@ -46,11 +46,11 @@ The frontend is built with Vue.js 3, which provides a modern reactive framework 
 
 \subsection{Backend Architecture}
 
-The backend is implemented with NestJS, a progressive Node.js framework that enforces modular, scalable architecture patterns. TypeScript ensures type safety throughout the codebase, reducing runtime errors and improving code maintainability. Authentication is managed through Passport middleware combined with JWT tokens, allowing stateless, scalable session handling without server-side session storage.
+The backend is implemented with NestJS, a progressive Node.js framework that enforces modular, scalable architecture patterns. TypeScript ensures type safety throughout the codebase, reducing runtime errors and improving code maintainability. Authentication is managed through Passport middleware combined with JWT tokens, allowing stateless, scalable session handling without server side session storage.
 
 \subsection{Data Storage and Caching}
 
-MongoDB serves as the primary data store, offering flexible document-based storage that adapts as the application evolves. To optimize performance, frequently accessed data—such as service plans and pricing information—is cached in Redis. This caching strategy reduces database load and API latency by checking the fast in-memory cache first, falling back to the database only when the cache is empty. When a cache miss occurs, the retrieved data is stored for future requests, creating a simple yet effective read-through cache pattern.
+MongoDB serves as the primary data store, offering flexible document based storage that adapts as the application evolves. To optimize performance, frequently accessed data, such as service plans and pricing information, is cached in Redis. This caching strategy reduces database load and API latency by checking the fast in memory cache first, falling back to the database only when the cache is empty. When a cache miss occurs, the retrieved data is stored for future requests, creating a simple yet effective read through cache pattern.
 
 \begin{figure}[H]
 \centering

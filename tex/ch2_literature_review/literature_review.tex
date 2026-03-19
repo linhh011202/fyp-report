@@ -3,17 +3,18 @@
 
 \section{Overview}
 
-The Gateway Dashboard project integrates two critical external systems: user authentication through Single Sign-On (SSO) providers, and payment processing for API usage billing. This chapter examines the technology decisions for these integrations, focusing on how market landscape, user base alignment, and API maturity informed the selection of Google and Apple for authentication, and Stripe for payment processing.
+The Gateway Dashboard project integrates two critical external systems: user authentication through Single Sign-On (SSO) providers, and payment processing for API usage billing. This chapter examines the technology decisions for these integrations.
 
-These choices reflect the broader principle underlying the Gateway Dashboard: prioritizing developer experience and operational reliability in the API management domain, while ensuring security and scalability for real-world deployment.
+Section~\ref{sec:sso_selection} compares popular SSO authentication providers available in the market, analyses their strengths and user base coverage, and explains the rationale for selecting Google and Apple. Section~\ref{sec:payment_selection} evaluates the two leading payment processing platforms, Stripe and PayPal, and justifies the selection of Stripe based on subscription support, developer experience, and webhook reliability. Finally, Section~\ref{sec:tech_decisions_summary} consolidates the key technology decisions and their justifications.
 
-\section{Authentication: Single Sign-On Provider Selection}
+\section{Authentication: SSO Provider Selection}
+\label{sec:sso_selection}
 
 \subsection{Understanding SSO and Its Role}
 
-Single Sign-On (SSO) enables users to authenticate once and gain access to multiple applications or services using a single set of credentials. Rather than requiring users to create and maintain separate usernames and passwords for each system, SSO delegates authentication to a trusted identity provider—such as Google or Apple—that the user already trusts and uses regularly.
+Single Sign-On (SSO) enables users to authenticate once and gain access to multiple applications or services using a single set of credentials. Rather than requiring users to create and maintain separate usernames and passwords for each system, SSO delegates authentication to a trusted identity provider, such as Google or Apple, that the user already trusts and uses regularly.
 
-For the Gateway Dashboard, implementing SSO serves two important purposes. First, it reduces friction for new users: developers already have Google or Apple accounts, so onboarding requires only a single click rather than filling out registration forms. Second, it outsources security responsibilities to platforms with significant resources dedicated to authentication infrastructure, including fraud detection, account recovery, and multi-factor authentication.
+For the Gateway Dashboard, implementing SSO serves two important purposes. First, it reduces friction for new users: developers already have Google or Apple accounts, so onboarding requires only a single click rather than filling out registration forms. Second, it outsources security responsibilities to platforms with significant resources dedicated to authentication infrastructure, including fraud detection, account recovery, and multi factor authentication.
 
 \subsection{The SSO Market Landscape}
 
@@ -23,11 +24,11 @@ Several identity providers compete for dominance in the SSO space, each with dif
 \centering
 \caption{Major SSO Providers and Their Positioning}
 \label{tab:sso_comparison}
-\begin{tabular}{|l|l|l|}
+\begin{tabular}{|l|p{4.5cm}|p{5.5cm}|}
 \hline
 \textbf{Provider} & \textbf{User Base / Focus} & \textbf{Distinctive Feature} \\ \hline
-Google & 2B+ users (71\% Android market share) & Ubiquitous, well-established OAuth 2.0 APIs \\ \hline
-Apple & 28\% iOS market share & Privacy-first design, email relay feature \\ \hline
+Google & 2B+ users (71\% Android market share) & Ubiquitous, well established OAuth 2.0 APIs \\ \hline
+Apple & 28\% iOS market share & Privacy first design, email relay feature \\ \hline
 Microsoft & Enterprise and productivity users & Azure AD integration for organizations \\ \hline
 Facebook & 2.9B users & Large social graph \\ \hline
 GitHub & Developer community & Native integration for tech professionals \\ \hline
@@ -41,11 +42,11 @@ The decision to implement Google and Apple SSO emerged from analysis of the targ
 \begin{enumerate}
     \item \textbf{Market Coverage and Accessibility:} Over 95\% of internet users possess at least one Google or Apple account \cite{statista2023accounts, statcounter2023mobile}. This means the vast majority of potential Gateway Dashboard users can authenticate with minimal additional steps. Requiring users to set up Microsoft, Facebook, or GitHub accounts would impose unnecessary barriers.
 
-    \item \textbf{Developer Alignment:} The Gateway Dashboard serves software developers building API-driven applications. Surveys indicate that developers are more likely to have Google and Apple accounts for personal use (mobile devices, productivity) compared to enterprise-specific solutions. This alignment between user behavior and available authentication methods maximizes conversion during onboarding.
+    \item \textbf{Developer Alignment:} The Gateway Dashboard serves software developers building API driven applications. Surveys indicate that developers are more likely to have Google and Apple accounts for personal use (mobile devices, productivity) compared to enterprise specific solutions. This alignment between user behavior and available authentication methods maximizes conversion during onboarding.
 
-    \item \textbf{Technical Maturity and Reliability:} Both Google and Apple offer production-grade OAuth 2.0 implementations with 99.9\%+ uptime guarantees \cite{google2023oauth, apple2023signin}. Their authentication infrastructure handles billions of login events daily, meaning the systems are battle-tested and unlikely to introduce unexpected downtime affecting the Gateway Dashboard.
+    \item \textbf{Technical Maturity and Reliability:} Both Google and Apple offer production grade OAuth 2.0 implementations with 99.9\%+ uptime guarantees \cite{google2023oauth, apple2023signin}. Their authentication infrastructure handles billions of login events daily, meaning the systems are battle tested and unlikely to introduce unexpected downtime affecting the Gateway Dashboard.
 
-    \item \textbf{Security and Privacy:} Both providers implement industry-standard security practices: two-factor authentication, device trust verification, and anomaly detection. Additionally, Apple's privacy-focused philosophy—including its email relay feature that shields user email addresses—aligns with growing regulatory expectations around user data protection.
+    \item \textbf{Security and Privacy:} Both providers implement industry standard security practices: two factor authentication, device trust verification, and anomaly detection. Additionally, Apple's privacy focused philosophy, including its email relay feature that shields user email addresses, aligns with growing regulatory expectations around user data protection.
 
     \item \textbf{Team Capacity and Scope:} The project divided SSO responsibilities among team members. This choice avoided duplicating authentication provider implementations across the team and allowed parallel, independent work streams.
 \end{enumerate}
@@ -53,12 +54,13 @@ The decision to implement Google and Apple SSO emerged from analysis of the targ
 The omission of Facebook and GitHub reflects pragmatic scoping: while GitHub would appeal to developers, it serves a smaller addressable market. Facebook, despite its large user base, is less aligned with professional developer workflows.
 
 \section{Payment Processing: Selecting the Right Platform}
+\label{sec:payment_selection}
 
 \subsection{The Payment Processing Challenge}
 
-A payment platform is more than a transaction processor—it is the operational backbone for billing and revenue. Beyond accepting one-time payments, modern SaaS platforms like the Gateway Dashboard must handle recurring subscriptions, metered billing based on usage, failed payment retries, and detailed financial reporting.
+A payment platform is more than a transaction processor; it is the operational backbone for billing and revenue. Beyond accepting one time payments, modern SaaS platforms like the Gateway Dashboard must handle recurring subscriptions, metered billing based on usage, failed payment retries, and detailed financial reporting.
 
-Stripe and PayPal represent the two most mature options for this category. Both support similar transaction fees (2.9\% + \$0.30 per transaction) and reach sufficient merchant and customer bases. Yet they differ significantly in their feature depth, developer ergonomics, and alignment with subscription-based business models.
+Stripe and PayPal represent the two most mature options for this category. Both support similar transaction fees (2.9\% + \$0.30 per transaction) and reach sufficient merchant and customer bases. Yet they differ significantly in their feature depth, developer ergonomics, and alignment with subscription based business models.
 
 \subsection{Comparative Feature Analysis}
 
@@ -73,13 +75,13 @@ Table~\ref{tab:payment_comparison} outlines the key dimensions distinguishing St
 \textbf{Dimension} & \textbf{Stripe} & \textbf{PayPal} \\ \hline
 \textbf{Transaction Fee} & 2.9\% + \$0.30 per transaction & 2.9\% + \$0.30 per transaction \\ \hline
 \textbf{API Design} & RESTful API with comprehensive, accessible documentation \cite{stripe2023docs} & Multiple API generations; historically complex migration paths \\ \hline
-\textbf{Checkout Experience} & Embedded checkout (user stays on merchant site) & Redirect-based checkout (user leaves merchant site) \\ \hline
+\textbf{Checkout Experience} & Embedded checkout (user stays on merchant site) & Redirect based checkout (user leaves merchant site) \\ \hline
 \textbf{Checkout Conversion} & Maintains user context, higher completion rates & Redirect flow typically reduces completion by 10-15\% \cite{baymard2020checkout} \\ \hline
-\textbf{Subscription Billing} & Native, production-ready: tiered plans, prorated changes, automated renewal \cite{stripe2023billing} & Limited flexibility; less mature subscription support \\ \hline
+\textbf{Subscription Billing} & Native, production ready: tiered plans, prorated changes, automated renewal \cite{stripe2023billing} & Limited flexibility; less mature subscription support \\ \hline
 \textbf{Metered Billing} & Supported natively & Not supported \\ \hline
 \textbf{Webhook System} & Automatic retry with exponential backoff; cryptographic signature verification \cite{sohan2017webhook} & Basic webhook support \\ \hline
 \textbf{Integration Speed} & Approximately 40\% faster typical implementation \cite{herzberg2019payment} & Slower; documentation fragmentation increases learning curve \\ \hline
-\textbf{Developer Experience} & Strong focus; SDKs in multiple languages & Limited developer-first tooling \\ \hline
+\textbf{Developer Experience} & Strong focus; SDKs in multiple languages & Limited developer first tooling \\ \hline
 \end{tabular}
 \end{table}
 
@@ -88,20 +90,21 @@ Table~\ref{tab:payment_comparison} outlines the key dimensions distinguishing St
 Stripe was selected for the Gateway Dashboard's payment infrastructure for reasons aligned with the project's architecture and business model:
 
 \begin{itemize}
-    \item \textbf{Subscription-Native Design:} The Gateway Dashboard monetizes through usage-based subscriptions (API request quotas, tiered pricing). Stripe's billing system natively supports this model with prorated upgrades, quota management, and automated renewal—features that PayPal does not offer cleanly. Implementing these on PayPal would require custom workarounds.
+    \item \textbf{Subscription native Design:} The Gateway Dashboard monetizes through usage based subscriptions (API request quotas, tiered pricing). Stripe's billing system natively supports this model with prorated upgrades, quota management, and automated renewal. These are features that PayPal does not offer cleanly. Implementing these on PayPal would require custom workarounds.
 
-    \item \textbf{Developer Experience and Speed:} Stripe's RESTful API and well-organized documentation reduce time-to-integration. The provided Node.js SDK aligns with the project's backend stack, minimizing custom code. This efficiency matters in an academic timeline with fixed deadlines.
+    \item \textbf{Developer Experience and Speed:} Stripe's RESTful API and well organized documentation reduce time to integration. The provided Node.js SDK aligns with the project's backend stack, minimizing custom code. This efficiency matters in an academic timeline with fixed deadlines.
 
-    \item \textbf{Embedded Checkout Flow:} Stripe's embedded checkout keeps users within the Gateway Dashboard throughout the payment process. Redirecting to PayPal's payment page, by contrast, risks checkout abandonment—studies show 10-15\% conversion loss when users leave a merchant site \cite{baymard2020checkout}. For an API management SaaS, maintaining contextual awareness during payment increases user confidence.
+    \item \textbf{Embedded Checkout Flow:} Stripe's embedded checkout keeps users within the Gateway Dashboard throughout the payment process. Redirecting to PayPal's payment page, by contrast, risks checkout abandonment. Studies show 10-15\% conversion loss when users leave a merchant site \cite{baymard2020checkout}. For an API management SaaS, maintaining contextual awareness during payment increases user confidence.
 
-    \item \textbf{Webhook Reliability and Consistency:} Payment confirmations must reliably reach the Gateway Dashboard's database to activate API access. Stripe's webhook system includes automatic retry logic with exponential backoff and cryptographic verification. This design prevents payment-database inconsistencies that could lock out paying customers or grant free access to non-payers.
+    \item \textbf{Webhook Reliability and Consistency:} Payment confirmations must reliably reach the Gateway Dashboard's database to activate API access. Stripe's webhook system includes automatic retry logic with exponential backoff and cryptographic verification. This design prevents payment database inconsistencies that could lock out paying customers or grant free access to non payers.
 
-    \item \textbf{Audience Alignment:} The Gateway Dashboard's users are software developers. Developers prioritize technical functionality, API quality, and developer-friendly tooling—Stripe's core strength—over consumer familiarity with brand names like PayPal.
+    \item \textbf{Audience Alignment:} The Gateway Dashboard's users are software developers. Developers prioritize technical functionality, API quality, and developer friendly tooling, which is Stripe's core strength, over consumer familiarity with brand names like PayPal.
 \end{itemize}
 
-PayPal remains a valid choice for other use cases (especially consumer-facing, one-time transactions), but subscription-centric platforms like the Gateway Dashboard benefit significantly from Stripe's design philosophy.
+PayPal remains a valid choice for other use cases (especially consumer facing, one time transactions), but subscription centric platforms like the Gateway Dashboard benefit significantly from Stripe's design philosophy.
 
 \section{Summary of Technology Decisions}
+\label{sec:tech_decisions_summary}
 
 Table~\ref{tab:technology_summary} consolidates the key findings of this literature review:
 
@@ -112,8 +115,8 @@ Table~\ref{tab:technology_summary} consolidates the key findings of this literat
 \begin{tabular}{|l|l|p{5cm}|}
 \hline
 \textbf{Component} & \textbf{Selection} & \textbf{Primary Justification} \\ \hline
-SSO Providers & Google + Apple & 95\%+ user coverage; strong developer alignment; enterprise-grade reliability \\ \hline
-Payment Platform & Stripe & Subscription-native design; superior developer UX; embedded checkout; reliable webhooks \\ \hline
+SSO Providers & Google + Apple & 95\%+ user coverage; strong developer alignment; enterprise grade reliability \\ \hline
+Payment Platform & Stripe & Subscription native design; superior developer UX; embedded checkout; reliable webhooks \\ \hline
 \end{tabular}
 \end{table}
 

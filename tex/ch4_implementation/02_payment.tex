@@ -18,7 +18,7 @@ The system consists of three modules that work in concert. The \textbf{Payment P
 
 \subsubsection{Checkout and Payment Flow}
 
-Figure~\ref{fig:checkout_flow_simple} illustrates the step-by-step checkout process when a user subscribes to a plan.
+Figure~\ref{fig:checkout_flow_simple} illustrates the step by step checkout process when a user subscribes to a plan.
 
 \begin{figure}[H]
 \centering
@@ -65,7 +65,7 @@ Figure~\ref{fig:plan_versioning_simple} illustrates how plan versions are manage
 \label{fig:plan_versioning_simple}
 \end{figure}
 
-When administrators need to modify plans---such as adjusting quota limits or updating feature descriptions---the system creates a new plan version rather than overwriting the old one. This approach preserves a historical record and ensures that existing subscribers continue to benefit from the terms of their originally purchased plan while new subscribers receive the updated terms. Plan data is heavily cached in Redis (refreshed automatically when new versions are created) to minimise database queries, since plan information is requested on every page load.
+When administrators need to modify plans, such as adjusting quota limits or updating feature descriptions, the system creates a new plan version rather than overwriting the old one. This approach preserves a historical record and ensures that existing subscribers continue to benefit from the terms of their originally purchased plan while new subscribers receive the updated terms. Plan data is heavily cached in Redis (refreshed automatically when new versions are created) to minimise database queries, since plan information is requested on every page load.
 
 \subsubsection{Webhook Synchronisation}
 
@@ -78,12 +78,12 @@ Webhooks are critical for keeping the local subscription database synchronised w
 \label{fig:webhook_flow_simple}
 \end{figure}
 
-Whenever a significant payment event occurs in Stripe, it sends a webhook notification to the application. The backend first verifies the message authenticity to ensure it genuinely comes from Stripe, then routes it based on event type. A \textbf{Payment Completed} event triggers subscription activation in the local database. A \textbf{Subscription Renewed} event resets usage quotas for the new billing period. A \textbf{Plan Change Applied} event updates the subscription to reflect the new plan and its associated quotas. Unrecognised events are logged and safely ignored. By using webhooks rather than polling Stripe repeatedly, the system achieves real-time synchronisation with minimal overhead.
+Whenever a significant payment event occurs in Stripe, it sends a webhook notification to the application. The backend first verifies the message authenticity to ensure it genuinely comes from Stripe, then routes it based on event type. A \textbf{Payment Completed} event triggers subscription activation in the local database. A \textbf{Subscription Renewed} event resets usage quotas for the new billing period. A \textbf{Plan Change Applied} event updates the subscription to reflect the new plan and its associated quotas. Unrecognised events are logged and safely ignored. By using webhooks rather than polling Stripe repeatedly, the system achieves real time synchronisation with minimal overhead.
 
 \subsubsection{Quota and Usage Tracking}
 
-The system enforces plan limits by tracking usage against quota. Each subscription record stores the total resource allowance per billing period (quota) and the amount already consumed (usage). Before allowing a resource-intensive operation such as transcribing audio, the system checks whether current usage exceeds the quota. This check occurs independently for each type of quota (e.g., batch processing minutes and live transcription minutes), allowing fine-grained control. When a subscription renews, usage counters reset to zero while quota limits remain fixed, giving users a fresh allocation each period.
+The system enforces plan limits by tracking usage against quota. Each subscription record stores the total resource allowance per billing period (quota) and the amount already consumed (usage). Before allowing a resource intensive operation such as transcribing audio, the system checks whether current usage exceeds the quota. This check occurs independently for each type of quota (e.g., batch processing minutes and live transcription minutes), allowing fine grained control. When a subscription renews, usage counters reset to zero while quota limits remain fixed, giving users a fresh allocation each period.
 
 \subsubsection{Caching Strategy}
 
-To reduce latency and database load, the system caches frequently accessed data in Redis. Plan definitions are cached for one hour (since they change infrequently but are queried on every page load), and Stripe price information is cached for 24 hours to avoid repeated external API calls. Both caches use a protective technique: if a requested item does not exist, the system temporarily remembers that it is missing (for 60 seconds), preventing repeated lookups for non-existent items that could otherwise overwhelm the system under heavy load. The caching layer is transparent to the rest of the application and is automatically invalidated when administrators update plan information.
+To reduce latency and database load, the system caches frequently accessed data in Redis. Plan definitions are cached for one hour (since they change infrequently but are queried on every page load), and Stripe price information is cached for 24 hours to avoid repeated external API calls. Both caches use a protective technique: if a requested item does not exist, the system temporarily remembers that it is missing (for 60 seconds), preventing repeated lookups for non existent items that could otherwise overwhelm the system under heavy load. The caching layer is transparent to the rest of the application and is automatically invalidated when administrators update plan information.

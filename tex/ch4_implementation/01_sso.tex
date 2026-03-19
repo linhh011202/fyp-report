@@ -1,7 +1,7 @@
 \subsection{Authentication and SSO Implementation}%
 \label{sec:authentication_and_sso}
 
-This section describes the authentication system implemented in the Gateway Dashboard. The system integrates three main modules that work together to provide secure user authentication, whether through traditional email/password login or modern single sign-on with Google and Apple.
+This section describes the authentication system implemented in the Gateway Dashboard. The system integrates three main modules that work together to provide secure user authentication, whether through traditional email/password login or modern single sign on with Google and Apple.
 
 Figure~\ref{fig:sso_architecture} provides an overview of how these authentication modules integrate within the system.
 
@@ -12,7 +12,7 @@ Figure~\ref{fig:sso_architecture} provides an overview of how these authenticati
 \label{fig:sso_architecture}
 \end{figure}
 
-The architecture shows three main components: the core Auth Module handling traditional login, the Google SSO Module using OAuth 2.0 redirects, and the Apple SSO Module using token-based verification. All three modules share a common token management layer that issues and validates user sessions.
+The architecture shows three main components: the core Auth Module handling traditional login, the Google SSO Module using OAuth 2.0 redirects, and the Apple SSO Module using token based verification. All three modules share a common token management layer that issues and validates user sessions.
 
 %----------------------------------------------------------------------
 \subsubsection{Google SSO Implementation}%
@@ -31,19 +31,19 @@ Figure~\ref{fig:google_sso_flow_simple} illustrates the simplified Google authen
 \label{fig:google_sso_flow_simple}
 \end{figure}
 
-The flow proceeds as follows: when a user clicks ``Sign in with Google,'' the frontend redirects them to Google's consent screen. The user reviews the requested permissions (email and profile access) and approves. Google then sends an authorisation code back to the backend, which exchanges it for the user's profile information. The backend checks whether this Google account is already linked to an existing user---if so, the user is logged in immediately; if not, they are directed to a brief signup completion page.
+The flow proceeds as follows: when a user clicks ``Sign in with Google,'' the frontend redirects them to Google's consent screen. The user reviews the requested permissions (email and profile access) and approves. Google then sends an authorisation code back to the backend, which exchanges it for the user's profile information. The backend checks whether this Google account is already linked to an existing user. If so, the user is logged in immediately; if not, they are directed to a brief signup completion page.
 
-A key design decision involves preserving user context during the redirect. Before sending the user to Google, the system encodes the user's intended destination into a state parameter that travels with the request. When Google redirects back, this state is decoded to resume the user's original action, preventing context loss during the multi-step authentication process.
+A key design decision involves preserving user context during the redirect. Before sending the user to Google, the system encodes the user's intended destination into a state parameter that travels with the request. When Google redirects back, this state is decoded to resume the user's original action, preventing context loss during the multi step authentication process.
 
 %----------------------------------------------------------------------
 \subsubsection{Apple SSO Implementation}%
 \label{sec:apple_sso_module}
 
-Apple Sign-In provides an alternative single sign-on option for users with Apple accounts, particularly important for iOS applications.
+Apple Sign-In provides an alternative single sign on option for users with Apple accounts, particularly important for iOS applications.
 
 \paragraph{POST Callback Architecture}
 
-Unlike Google's redirect-based OAuth flow, Apple Sign-In uses a POST callback mechanism. After the user approves sign-in on their Apple device, Apple sends the authentication response directly to the backend via an HTTP POST request rather than redirecting the user's browser. This POST-based approach provides cleaner handling of the user's session and reduces potential issues with browser redirects.
+Unlike Google's redirect based OAuth flow, Apple Sign-In uses a POST callback mechanism. After the user approves sign-in on their Apple device, Apple sends the authentication response directly to the backend via an HTTP POST request rather than redirecting the user's browser. This POST based approach provides cleaner handling of the user's session and reduces potential issues with browser redirects.
 
 Figure~\ref{fig:apple_sso_flow_simple} illustrates the Apple Sign-In flow.
 
@@ -56,13 +56,13 @@ Figure~\ref{fig:apple_sso_flow_simple} illustrates the Apple Sign-In flow.
 
 The flow begins when the user taps ``Sign in with Apple'' on their device. Apple authenticates the user (via Face ID, Touch ID, or passcode) and returns a signed identity token to the application. The app forwards this token to the backend, which verifies its authenticity with Apple's servers. Similar to the Google flow, the backend then checks whether the user already has an account. Existing users are logged in immediately, while new users are directed to complete their account setup.
 
-The backend implements a two-tier verification strategy for Apple's identity tokens: it first attempts verification using an optimised library, and if that fails, falls back to manual cryptographic verification. This dual approach ensures robust token validation even if external dependencies become temporarily unavailable.
+The backend implements a two tier verification strategy for Apple's identity tokens: it first attempts verification using an optimised library, and if that fails, falls back to manual cryptographic verification. This dual approach ensures robust token validation even if external dependencies become temporarily unavailable.
 
 %----------------------------------------------------------------------
 \subsubsection{Token Management}%
 \label{sec:token_management}
 
-The system issues JSON Web Tokens (JWTs) to represent authenticated user sessions. A JWT is a digitally signed, self-contained token that encodes information about the user and has a limited validity period. The token management system handles three key operations: generation, refresh, and revocation.
+The system issues JSON Web Tokens (JWTs) to represent authenticated user sessions. A JWT is a digitally signed, self contained token that encodes information about the user and has a limited validity period. The token management system handles three key operations: generation, refresh, and revocation.
 
 \paragraph{Token Generation (Login)}
 
@@ -75,11 +75,11 @@ Figure~\ref{fig:token_login_flow} shows what happens when a user logs in.
 \label{fig:token_login_flow}
 \end{figure}
 
-When a user submits their credentials, the backend validates them against the database. If valid, any existing tokens for that user are invalidated (enforcing a single-session policy), a new token is generated and stored, and the token is returned to the frontend. This ensures only one active session exists per user at any time.
+When a user submits their credentials, the backend validates them against the database. If valid, any existing tokens for that user are invalidated (enforcing a single session policy), a new token is generated and stored, and the token is returned to the frontend. This ensures only one active session exists per user at any time.
 
 \paragraph{Token Refresh}
 
-Tokens have short lifespans to limit damage if compromised. To avoid forcing users to re-authenticate frequently, the system implements automatic token refresh.
+Tokens have short lifespans to limit damage if compromised. To avoid forcing users to reauthenticate frequently, the system implements automatic token refresh.
 
 Figure~\ref{fig:token_refresh_flow_simple} illustrates this mechanism.
 
@@ -90,7 +90,7 @@ Figure~\ref{fig:token_refresh_flow_simple} illustrates this mechanism.
 \label{fig:token_refresh_flow_simple}
 \end{figure}
 
-When a token approaches expiration, the frontend sends a refresh request. The backend validates the expiring token, immediately adds it to a blacklist to prevent reuse, generates a fresh token, and returns it. This cycle continues transparently, keeping the user logged in without interruption while maintaining security through short-lived credentials.
+When a token approaches expiration, the frontend sends a refresh request. The backend validates the expiring token, immediately adds it to a blacklist to prevent reuse, generates a fresh token, and returns it. This cycle continues transparently, keeping the user logged in without interruption while maintaining security through short lived credentials.
 
 \paragraph{Logout and Token Revocation}
 
@@ -103,10 +103,10 @@ Figure~\ref{fig:token_logout_flow} shows the logout process.
 \label{fig:token_logout_flow}
 \end{figure}
 
-When a user logs out, the backend adds their current token to a blacklist stored in Redis (enabling instant revocation) and removes the token record from the database. The frontend then clears any locally stored session data and redirects the user to the sign-in page. Any subsequent attempt to use the revoked token is rejected.
+When a user logs out, the backend adds their current token to a blacklist stored in Redis (enabling instant revocation) and removes the token record from the database. The frontend then clears any locally stored session data and redirects the user to the sign in page. Any subsequent attempt to use the revoked token is rejected.
 
 %----------------------------------------------------------------------
-\subsubsection{End-to-End SSO User Journey}%
+\subsubsection{End to End SSO User Journey}%
 \label{sec:sso_user_journey}
 
 The SSO user journey differs depending on whether the user already has an account. The following two diagrams illustrate each path separately.
@@ -118,7 +118,7 @@ Figure~\ref{fig:sso_journey_existing} shows the flow for users who already have 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{images/sso_journey_existing_user.png}
-\caption{SSO Journey --- Existing User}
+\caption{SSO Journey: Existing User}
 \label{fig:sso_journey_existing}
 \end{figure}
 
@@ -126,19 +126,19 @@ For existing users, authentication is immediate: after the identity provider con
 
 \paragraph{New User Journey}
 
-Figure~\ref{fig:sso_journey_new} shows the flow for first-time SSO users who do not yet have an account.
+Figure~\ref{fig:sso_journey_new} shows the flow for first time SSO users who do not yet have an account.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{images/sso_journey_new_user.png}
-\caption{SSO Journey --- New User (First-Time Sign-Up)}
+\caption{SSO Journey: New User (First-Time Sign-Up)}
 \label{fig:sso_journey_new}
 \end{figure}
 
-For new users, an additional step is required: since the system needs a password for traditional login fallback, the user receives a short-lived temporary token and is directed to a signup completion page. After setting a password and confirming their details, the system creates their account, issues a full authentication token, and redirects them to the dashboard.
+For new users, an additional step is required: since the system needs a password for traditional login fallback, the user receives a short lived temporary token and is directed to a signup completion page. After setting a password and confirming their details, the system creates their account, issues a full authentication token, and redirects them to the dashboard.
 
 %----------------------------------------------------------------------
 \subsubsection{Shared SSO Behaviour}%
 \label{sec:shared_sso_behavior}
 
-Both Google and Apple SSO modules share a common authentication flow managed by the core Auth Module. Whether users authenticate via SSO or through traditional email/password login, they receive the same token-based session mechanism. This unified approach means that all users benefit from token blacklisting, single-session enforcement, and the same token refresh infrastructure regardless of how they initially authenticated.
+Both Google and Apple SSO modules share a common authentication flow managed by the core Auth Module. Whether users authenticate via SSO or through traditional email/password login, they receive the same token based session mechanism. This unified approach means that all users benefit from token blacklisting, single session enforcement, and the same token refresh infrastructure regardless of how they initially authenticated.

@@ -1,7 +1,7 @@
 \chapter{Implementation}
 \label{chap:implementation}
 
-This chapter describes the implementation of the Gateway Dashboard system, organised into two main parts. The first part covers the backend services, including the authentication system with Single Sign-On support and the payment and subscription management infrastructure. The second part covers the frontend dashboard application built with Vue.js.
+This chapter describes the implementation of the Gateway Dashboard system, organised into two main sections. Section~\ref{sec:backend} covers the backend services: Section~\ref{sec:authentication_and_sso} details the authentication system with Single Sign-On support, and Section~\ref{sec:payment} describes the payment and subscription management infrastructure. Section~\ref{sec:frontend} covers the frontend dashboard integration: Section~\ref{sec:frontend_overview} presents the frontend architecture, Section~\ref{sec:frontend_auth} explains the authentication user experience, Section~\ref{sec:frontend_routing} describes routing and navigation guards, and Section~\ref{sec:frontend_subscription} details the subscription management interface.
 
 % ============================================================
 % PART 1: BACKEND IMPLEMENTATION
@@ -9,7 +9,7 @@ This chapter describes the implementation of the Gateway Dashboard system, organ
 \section{Backend Implementation}
 \label{sec:backend}
 
-The backend is built with NestJS, a modular Node.js framework that provides a well-structured foundation for building scalable server-side applications. The backend is organised into distinct modules, each responsible for a specific domain of functionality. This section describes the two major backend subsystems developed in this project: the authentication system and the payment and subscription management system.
+The backend is built with NestJS, a modular Node.js framework that provides a well structured foundation for building scalable server side applications. The backend is organised into distinct modules, each responsible for a specific domain of functionality. Section~\ref{sec:authentication_and_sso} describes the authentication system with SSO support, and Section~\ref{sec:payment} covers the payment and subscription management system.
 
 \input{tex/ch4_implementation/01_sso}
 \input{tex/ch4_implementation/02_payment}
@@ -17,12 +17,16 @@ The backend is built with NestJS, a modular Node.js framework that provides a we
 % ============================================================
 % PART 2: FRONTEND IMPLEMENTATION
 % ============================================================
-\section{Frontend Implementation}
+\section{Frontend Dashboard Integration}
 \label{sec:frontend}
 
-The frontend is a Single Page Application (SPA) built with Vue.js 3 and Vuetify, providing an intuitive web-based interface for users and administrators. This section describes the frontend architecture, authentication experience, navigation system, and subscription management interface.
+The Gateway Dashboard is an existing Single Page Application (SPA) built with Vue.js 3 and Vuetify. This project extends the dashboard by integrating several new pages that support SSO authentication, subscription management, and administrative controls. Section~\ref{sec:frontend_overview} presents the overall frontend architecture, Section~\ref{sec:frontend_auth} describes the authentication user experience, Section~\ref{sec:frontend_routing} covers the routing and navigation guard system, and Section~\ref{sec:frontend_subscription} details the subscription management interface.
 
 \input{tex/ch4_implementation/04_frontend_overview}
 \input{tex/ch4_implementation/05_frontend_auth}
 \input{tex/ch4_implementation/06_frontend_routing}
 \input{tex/ch4_implementation/07_frontend_subscription}
+
+\section{Summary}
+
+This chapter described the full implementation of the Gateway Dashboard system across both backend and frontend. On the backend, the authentication system supports three login methods (email/password, Google OAuth 2.0, and Apple Sign-In) unified under a common token management layer with automatic refresh and revocation capabilities. The payment system integrates Stripe for checkout, subscription lifecycle management, plan versioning, and real time webhook synchronisation, with Redis caching to optimise plan and pricing queries. On the frontend, this project integrated new pages into the existing Gateway Dashboard, including authentication pages with SSO support, a subscription management interface with usage monitoring and plan selection, navigation guards enforcing role based access control, and an administrative interface for configuring plans and managing users. Together, these components deliver a complete, production ready platform for commercial speech service management.
